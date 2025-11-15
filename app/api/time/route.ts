@@ -1,5 +1,3 @@
 export async function GET() {
-  return new Response(JSON.stringify({ now: Date.now() }), {
-    headers: { "Content-Type": "application/json" },
-  });
+  return Response.json({ now: Date.now() });
 }

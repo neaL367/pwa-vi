@@ -3,7 +3,7 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import localFont from "next/font/local";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/cn";
 
 import type { Metadata, Viewport } from "next";
 

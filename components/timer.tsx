@@ -1,7 +1,7 @@
 "use client";
 
 import { TimeLeft } from "@/hooks/use-countdown";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/cn";
 
 interface TimerProps {
   timeLeft: TimeLeft | null;

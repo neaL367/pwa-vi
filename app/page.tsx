@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/cn";
 
 import { LogoVI } from "@/components/logo-vi";
 import { LogoPlayStation } from "@/components/logo-playstation";
