@@ -168,11 +168,17 @@ export function PWAManager() {
 
   if (!mounted) return null;
 
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isMobileBrowser = isIOS || isAndroid;
+
   const isSupported = isPushSupported();
   const permission = getNotificationPermission();
   const isBlocked = permission === "denied";
   const isSubscribed = !!subscription;
-  const showInstallPrompt = !isStandalone && (isIOS || deferredPrompt);
+  const showInstallPrompt =
+    !isStandalone && (isIOS || isAndroid || deferredPrompt);
+
+  const showSubscribeButton = !isMobileBrowser || isStandalone;
 
   return (
     <div className="space-y-8">
@@ -190,7 +196,7 @@ export function PWAManager() {
             </Button>
           )}
 
-          {isIOS && (
+          {isIOS && !deferredPrompt && (
             <p className="px-10 text-sm text-muted-foreground">
               To install this app, tap the share button
               <span role="img" aria-label="share icon">
@@ -211,7 +217,7 @@ export function PWAManager() {
         </div>
       )}
 
-      {isSupported && isStandalone ? (
+      {isSupported && showSubscribeButton ? (
         <div className="text-center font-deco-regular">
           <h3 className="mb-2 text-lg text-white font-semibold">
             Push Notifications
@@ -256,6 +262,10 @@ export function PWAManager() {
             </div>
           )}
         </div>
+      ) : !showSubscribeButton ? (
+        <p className="text-center text-sm text-muted-foreground">
+          Install the app to enable push notifications.
+        </p>
       ) : (
         <p className="text-center text-sm text-muted-foreground">
           Push notifications are not supported on this device.
