@@ -10,7 +10,8 @@ import { Title } from "@/components/title";
 import { Quote } from "@/components/quote";
 import { Timer } from "@/components/timer";
 
-import { PWAManager, PWAProvider } from "@/components/pwa-manager";
+import { PWAManager } from "@/components/pwa-manager";
+import { PWAProvider } from "@/components/pwa-context";
 
 import { useCountdown } from "@/hooks/use-countdown";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -52,7 +53,9 @@ function PageContent() {
       </div>
 
       <div className="mt-12 flex gap-6 flex-col justify-center">
-        <PWAManager />
+        <PWAProvider>
+          <PWAManager />
+        </PWAProvider>
       </div>
     </div>
   );
@@ -61,9 +64,7 @@ function PageContent() {
 export default function Page() {
   return (
     <Suspense>
-      <PWAProvider>
-        <PageContent />
-      </PWAProvider>
+      <PageContent />
     </Suspense>
   );
 }
