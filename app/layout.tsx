@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 
 import type { Metadata, Viewport } from "next";
 
+const baseUrl = "https://pwa-vi.vercel.app"
+
 const ArtDecoRegular = localFont({
   src: "../public/art-deco-regular.woff",
   display: "swap",
@@ -32,7 +34,9 @@ export const viewport: Viewport = {
   themeColor: "#191724",
 };
 
+
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl),
   title: "Grand Theft Auto VI Countdown",
   description: "Countdown timer for Grand Theft Auto VI release",
   icons: [
@@ -53,10 +57,20 @@ export const metadata: Metadata = {
     url: "/",
     title: "Grand Theft Auto VI Countdown",
     description: "Countdown timer for Grand Theft Auto VI release",
+    images: [
+      {
+        url: `${baseUrl}/opengraph-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "neaL367 - Personal website",
+      },
+    ],
   },
   twitter: {
+    card: "summary",
     title: "Grand Theft Auto VI Countdown",
     description: "Countdown timer for Grand Theft Auto VI release",
+    images: `${baseUrl}/opengraph-image.png`,
   },
   robots: {
     index: true,
