@@ -11,9 +11,9 @@ interface NotificationItem {
 }
 
 const NOTIFICATION_THRESHOLDS = {
-  MINUTES: [30, 15, 10, 5, 1],
+  MINUTES: [30, 15, 5, 1],
   HOURS: [24, 12, 6, 3, 1],
-  DAYS: [6, 5, 4, 3, 2, 1],
+  DAYS: [7, 6, 5, 4, 3, 2],
   WEEKS: [4, 3, 2],
   MONTHS: [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2],
 };
@@ -47,14 +47,12 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
   }
 
   // Minute notifications
-  if (
-    days === 0 &&
-    hours === 0 &&
-    NOTIFICATION_THRESHOLDS.MINUTES.includes(minutes)
-  ) {
+  if (days === 0 && NOTIFICATION_THRESHOLDS.MINUTES.includes(minutes)) {
     return [
       {
-        body: `Only ${minutes} minute${minutes > 1 ? "s" : ""} until GTA VI release!`,
+        body: `Only ${minutes} minute${
+          minutes > 1 ? "s" : ""
+        } until GTA VI release!`,
         key: `min${minutes}`,
       },
     ];
@@ -93,10 +91,16 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
 
   // Month notifications
   const months = Math.ceil(days / 30);
-  if (months <= 12 && NOTIFICATION_THRESHOLDS.MONTHS.includes(months)) {
+  if (
+    months >= 2 &&
+    months <= 12 &&
+    NOTIFICATION_THRESHOLDS.MONTHS.includes(months)
+  ) {
     return [
       {
-        body: `📅 ${months} month${months > 1 ? "s" : ""} until GTA VI release!`,
+        body: `${months} month${
+          months > 1 ? "s" : ""
+        } until GTA VI release!`,
         key: `m${months}`,
       },
     ];
