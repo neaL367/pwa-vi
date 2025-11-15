@@ -130,7 +130,12 @@ export function useNotifications(
   }, []);
 
   useEffect(() => {
-    if (!isSupported || Notification.permission !== "granted") return;
+    if (
+      !isSupported ||
+      typeof Notification === "undefined" ||
+      Notification.permission !== "granted"
+    )
+      return;
 
     const pending = getPendingNotifications(deadline, offset).filter(
       (n) => !notified.includes(n.key)
@@ -154,5 +159,11 @@ export function useNotifications(
     return () => clearTimeout(t);
   }, [timeLeft, notified, deadline, isSupported, pushSubscription, offset]);
 
-  return { isSupported, hasPermission: Notification.permission === "granted" };
+  return {
+    isSupported,
+    hasPermission:
+      typeof window !== "undefined" &&
+      typeof Notification !== "undefined" &&
+      Notification.permission === "granted",
+  };
 }
