@@ -19,9 +19,7 @@ function PageContent() {
   const deadline = new Date("2026-11-19T00:00:00+07:00");
   const { timeLeft, isExpired, offset } = useCountdown(deadline);
 
-  useNotifications(deadline, timeLeft, offset, {
-    title: "Grand Theft Auto VI",
-  });
+  useNotifications(deadline, timeLeft, offset);
 
   return (
     <div

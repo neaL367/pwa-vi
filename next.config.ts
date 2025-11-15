@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  cacheComponents: false,
+  cacheComponents: true,
   images: {
     unoptimized: true,
   },

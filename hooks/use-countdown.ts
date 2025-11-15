@@ -39,43 +39,30 @@ const isExpired = (left: TimeLeft) =>
 export function useCountdown(deadline: Date) {
   const target = deadline.getTime();
   const [offset, setOffset] = useState(0);
-
-  const [timeLeft, setTimeLeft] = useState<TimeLeft>(() =>
+  const [timeLeft, setTimeLeft] = useState<TimeLeft>(
     calculateTimeLeft(target, 0)
   );
 
   useEffect(() => {
     const syncTime = async () => {
       try {
-        const clientStart = Date.now();
         const res = await fetch("/api/time");
         const data = await res.json();
-        const clientEnd = Date.now();
-        const serverTime = data.now;
-        const latency = (clientEnd - clientStart) / 2;
-        const clientTimeAtServer = clientEnd - latency;
-        const newOffset = serverTime - clientTimeAtServer;
-        setOffset(newOffset);
-
-        setTimeLeft(calculateTimeLeft(target, newOffset));
+        setOffset(data.now - Date.now());
       } catch (err) {
         console.error("Failed to sync server time:", err);
       }
     };
     syncTime();
-  }, [target]);
-
-  const expired = isExpired(timeLeft);
+  }, []);
 
   useEffect(() => {
-    if (expired) return;
-
     const timer = setInterval(() => {
       setTimeLeft(calculateTimeLeft(target, offset));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [target, offset, expired]);
+  }, [target, offset]);
 
-  return { timeLeft, isExpired: expired, offset };
+  return { timeLeft, isExpired: isExpired(timeLeft), offset };
 }
