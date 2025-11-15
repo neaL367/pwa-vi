@@ -105,18 +105,18 @@ export function PWAManager() {
     };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+  // const handleInstallClick = async () => {
+  //   if (!deferredPrompt) return;
 
-    try {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to install prompt: ${outcome}`);
-      setDeferredPrompt(null);
-    } catch (error) {
-      console.error("Error showing install prompt:", error);
-    }
-  };
+  //   try {
+  //     await deferredPrompt.prompt();
+  //     const { outcome } = await deferredPrompt.userChoice;
+  //     console.log(`User response to install prompt: ${outcome}`);
+  //     setDeferredPrompt(null);
+  //   } catch (error) {
+  //     console.error("Error showing install prompt:", error);
+  //   }
+  // };
 
   const subscribe = useCallback(async () => {
     if (subscription || loading) return;
@@ -186,7 +186,7 @@ export function PWAManager() {
         <div className="space-y-2 text-center font-deco-regular">
           <h3 className="text-lg font-semibold text-zinc-300">Install App</h3>
 
-          {deferredPrompt && (
+          {/* {!deferredPrompt && (
             <Button
               onClick={handleInstallClick}
               variant="outline"
@@ -194,7 +194,7 @@ export function PWAManager() {
             >
               Add to Home Screen
             </Button>
-          )}
+          )} */}
 
           {isIOS && !deferredPrompt && (
             <p className="px-10 text-sm text-muted-foreground">
@@ -212,6 +212,23 @@ export function PWAManager() {
                 </svg>
               </span>
               and then &quot;Add to Home Screen&quot;
+            </p>
+          )}
+
+          {isAndroid && !deferredPrompt && (
+            <p className="px-10 text-sm text-muted-foreground">
+              To install this app, tap the menu button
+              <span role="img" aria-label="menu icon">
+                {" "}
+                <svg
+                  className="inline-block w-4 h-4 mx-1"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                </svg>
+              </span>
+              and then &quot;Add to Home Screen&quot; or &quot;Install App&quot;
             </p>
           )}
         </div>
