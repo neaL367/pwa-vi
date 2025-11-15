@@ -211,7 +211,7 @@ export function PWAManager() {
         </div>
       )}
 
-      {isSupported ? (
+      {isSupported && isStandalone ? (
         <div className="text-center font-deco-regular">
           <h3 className="mb-2 text-lg text-white font-semibold">
             Push Notifications
