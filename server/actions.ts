@@ -17,10 +17,6 @@ interface NotificationResult {
   error?: string;
 }
 
-/**
- * Subscribe a user to push notifications
- * Stores subscription in database
- */
 export async function subscribeUser(
   sub: PushSubscriptionJSON,
   userId?: string
@@ -49,10 +45,7 @@ export async function subscribeUser(
   }
 }
 
-/**
- * Unsubscribe a user from push notifications
- * Removes subscription from database
- */
+
 export async function unsubscribeUser(
   endpoint?: string
 ): Promise<SubscriptionResult> {
@@ -71,10 +64,6 @@ export async function unsubscribeUser(
   }
 }
 
-/**
- * Send push notification to all subscribed users
- * Handles invalid subscriptions by removing them
- */
 export async function sendNotification(
   message: string
 ): Promise<NotificationResult> {

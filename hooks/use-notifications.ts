@@ -18,24 +18,28 @@ const NOTIFICATION_THRESHOLDS = {
   MONTHS: [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2],
 };
 
-const calculateTimeRemaining = (deadline: Date) => {
-  const diff = +deadline - +new Date();
+const getRemaining = (deadline: Date, offset: number) => {
+  const now = Date.now() + offset;
+  const diff = deadline.getTime() - now;
+
   if (diff <= 0) return null;
 
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-  const minutes = Math.floor((diff / 1000 / 60) % 60);
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff / 3600000) % 24);
+  const minutes = Math.floor((diff / 60000) % 60);
 
   return { diff, days, hours, minutes };
 };
 
-const getPendingNotifications = (deadline: Date): NotificationItem[] => {
-  const remaining = calculateTimeRemaining(deadline);
-  if (!remaining) return [];
+const getPendingNotifications = (
+  deadline: Date,
+  offset: number
+): NotificationItem[] => {
+  const r = getRemaining(deadline, offset);
+  if (!r) return [];
 
-  const { diff, days, hours, minutes } = remaining;
+  const { diff, days, hours, minutes } = r;
 
-  // Release notification
   if (diff <= 1000) {
     return [
       {
@@ -46,7 +50,6 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
     ];
   }
 
-  // Minute notifications
   if (days === 0 && NOTIFICATION_THRESHOLDS.MINUTES.includes(minutes)) {
     return [
       {
@@ -58,7 +61,6 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
     ];
   }
 
-  // Hour notifications
   if (days === 0 && NOTIFICATION_THRESHOLDS.HOURS.includes(hours)) {
     return [
       {
@@ -68,7 +70,6 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
     ];
   }
 
-  // Day notifications
   if (days > 0 && NOTIFICATION_THRESHOLDS.DAYS.includes(days)) {
     return [
       {
@@ -78,7 +79,6 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
     ];
   }
 
-  // Week notifications
   const weeks = Math.ceil(days / 7);
   if (weeks <= 4 && NOTIFICATION_THRESHOLDS.WEEKS.includes(weeks)) {
     return [
@@ -89,18 +89,11 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
     ];
   }
 
-  // Month notifications
   const months = Math.ceil(days / 30);
-  if (
-    months >= 2 &&
-    months <= 12 &&
-    NOTIFICATION_THRESHOLDS.MONTHS.includes(months)
-  ) {
+  if (months >= 2 && NOTIFICATION_THRESHOLDS.MONTHS.includes(months)) {
     return [
       {
-        body: `${months} month${
-          months > 1 ? "s" : ""
-        } until GTA VI release!`,
+        body: `${months} month${months > 1 ? "s" : ""} until GTA VI release!`,
         key: `m${months}`,
       },
     ];
@@ -109,19 +102,19 @@ const getPendingNotifications = (deadline: Date): NotificationItem[] => {
   return [];
 };
 
-const isNotificationSupported = (): boolean => {
-  return typeof window !== "undefined" && "Notification" in window;
-};
+const isNotificationSupported = () =>
+  typeof window !== "undefined" && "Notification" in window;
 
-const isPushSupported = (): boolean => {
-  return (
-    typeof window !== "undefined" &&
-    "serviceWorker" in navigator &&
-    "PushManager" in window
-  );
-};
+const isPushSupported = () =>
+  typeof window !== "undefined" &&
+  "serviceWorker" in navigator &&
+  "PushManager" in window;
 
-export function useNotifications(deadline: Date, timeLeft: TimeLeft) {
+export function useNotifications(
+  deadline: Date,
+  timeLeft: TimeLeft,
+  offset: number
+) {
   const [notified, setNotified] = useState<string[]>([]);
   const [isSupported, setIsSupported] = useState(false);
   const [pushSubscription, setPushSubscription] =
@@ -135,24 +128,18 @@ export function useNotifications(deadline: Date, timeLeft: TimeLeft) {
 
     if (!isPushSupported()) return;
 
-    const initPushSubscription = async () => {
+    const initPush = async () => {
       try {
         await navigator.serviceWorker.register("/sw.js");
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-
-        if (subscription) {
-          setPushSubscription(subscription);
-        }
-      } catch (error) {
-        console.error("Failed to initialize push subscription:", error);
-      }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) setPushSubscription(sub);
+      } catch {}
     };
 
-    initPushSubscription();
+    initPush();
   }, []);
 
-  // Send notifications when thresholds are reached
   useEffect(() => {
     if (
       !isSupported ||
@@ -162,36 +149,32 @@ export function useNotifications(deadline: Date, timeLeft: TimeLeft) {
       return;
     }
 
-    const pending = getPendingNotifications(deadline).filter(
-      (notification) => !notified.includes(notification.key)
+    const pending = getPendingNotifications(deadline, offset).filter(
+      (n) => !notified.includes(n.key)
     );
 
     if (pending.length === 0) return;
 
-    const timeout = setTimeout(() => {
-      pending.forEach((notification) => {
-        try {
-          new Notification("Grand Theft Auto VI", {
-            body: notification.body,
-            icon: "/apple-touch-icon.png",
-            badge: "/apple-touch-icon.png",
-            tag: notification.key,
-            requireInteraction: notification.requireInteraction,
-          });
+    const t = setTimeout(() => {
+      pending.forEach((n) => {
+        new Notification("Grand Theft Auto VI", {
+          body: n.body,
+          icon: "/apple-touch-icon.png",
+          badge: "/apple-touch-icon.png",
+          tag: n.key,
+          requireInteraction: n.requireInteraction,
+        });
 
-          if (pushSubscription) {
-            sendNotification(notification.body).catch(console.error);
-          }
-        } catch (error) {
-          console.error("Failed to send notification:", error);
+        if (pushSubscription) {
+          sendNotification(n.body).catch(() => {});
         }
       });
 
       setNotified((prev) => [...prev, ...pending.map((n) => n.key)]);
     }, 0);
 
-    return () => clearTimeout(timeout);
-  }, [timeLeft, notified, deadline, isSupported, pushSubscription]);
+    return () => clearTimeout(t);
+  }, [timeLeft, notified, deadline, isSupported, pushSubscription, offset]);
 
   return {
     isSupported,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getTime } from "@/lib/time";
 
 export interface TimeLeft {
   days: number;
@@ -16,13 +17,11 @@ const MILLISECONDS = {
   SECOND: 1000,
 };
 
-const calculateTimeLeft = (targetTimestamp: number, offset: number): TimeLeft => {
+const calculateTimeLeft = (target: number, offset: number): TimeLeft => {
   const now = Date.now() + offset;
-  const diff = targetTimestamp - now;
+  const diff = target - now;
 
-  if (diff <= 0) {
-    return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-  }
+  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
 
   return {
     days: Math.floor(diff / MILLISECONDS.DAY),
@@ -32,45 +31,29 @@ const calculateTimeLeft = (targetTimestamp: number, offset: number): TimeLeft =>
   };
 };
 
-const isCountdownExpired = (timeLeft: TimeLeft): boolean => {
-  return (
-    timeLeft.days === 0 &&
-    timeLeft.hours === 0 &&
-    timeLeft.minutes === 0 &&
-    timeLeft.seconds === 0
-  );
-};
+const isExpired = (left: TimeLeft) =>
+  left.days === 0 &&
+  left.hours === 0 &&
+  left.minutes === 0 &&
+  left.seconds === 0;
 
 export function useCountdown(deadline: Date) {
-  const targetTimestamp = deadline.getTime();
+  const target = deadline.getTime();
   const [offset, setOffset] = useState(0);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>(
-    calculateTimeLeft(targetTimestamp, 0)
+    calculateTimeLeft(target, 0)
   );
 
   useEffect(() => {
-    const syncTime = async () => {
-      try {
-        const response = await fetch("/api/time");
-        const data = await response.json();
-        setOffset(data.now - Date.now());
-      } catch (error) {
-        console.error("Failed to sync time:", error);
-      }
-    };
-    
-    syncTime();
+    getTime().then((offset) => setOffset(offset));
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(targetTimestamp, offset));
+      setTimeLeft(calculateTimeLeft(target, offset));
     }, 1000);
-
     return () => clearInterval(timer);
-  }, [targetTimestamp, offset]);
+  }, [target, offset]);
 
-  const isExpired = isCountdownExpired(timeLeft);
-
-  return { timeLeft, isExpired };
+  return { timeLeft, isExpired: isExpired(timeLeft), offset};
 }

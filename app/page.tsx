@@ -17,9 +17,9 @@ import { useNotifications } from "@/hooks/use-notifications";
 
 function PageContent() {
   const deadline = new Date("2026-11-19T00:00:00Z");
-  const { timeLeft, isExpired } = useCountdown(deadline);
+  const { timeLeft, isExpired, offset } = useCountdown(deadline);
 
-  useNotifications(deadline, timeLeft as TimeLeft);
+  useNotifications(deadline, timeLeft as TimeLeft, offset);
 
   return (
     <div
