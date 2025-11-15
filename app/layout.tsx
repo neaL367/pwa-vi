@@ -1,5 +1,6 @@
 import "./globals.css";
 
+import { Analytics } from "@vercel/analytics/next";
 import localFont from "next/font/local";
 
 import { cn } from "@/lib/utils";
@@ -77,6 +78,7 @@ export default function RootLayout(props: LayoutProps<"/">) {
           `${ArtDecoBold.variable} ${ArtDecoSemiBold.variable} ${ArtDecoRegular.variable} antialiased overflow-hidden`
         )}
       >
+        <Analytics />
         <main>{props.children}</main>
       </body>
     </html>
