@@ -1,9 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  createContext,
+  useContext,
+  useMemo,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { subscribeUser, unsubscribeUser } from "@/server/actions";
 import { PushSubscriptionJSON } from "@/server/webpush";
+import {
+  isPushSupported,
+  getNotificationPermission,
+  urlBase64ToUint8Array,
+} from "@/lib/pwa";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -14,44 +26,140 @@ interface NavigatorStandalone extends Navigator {
   standalone?: boolean;
 }
 
-const urlBase64ToUint8Array = (base64String: string): BufferSource => {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base);
-  const outputArray = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) {
-    outputArray[i] = raw.charCodeAt(i);
-  }
-  return outputArray;
-};
+interface PWAContextType {
+  isPushSupported: boolean;
+  permission: NotificationPermission;
+  subscription: PushSubscription | null;
+  subscribe: () => Promise<void>;
+  unsubscribe: () => Promise<void>;
+  loading: boolean;
+}
 
-const isPushSupported = (): boolean => {
-  return (
-    typeof window !== "undefined" &&
-    "serviceWorker" in navigator &&
-    "PushManager" in window
-  );
-};
+const PWAContext = createContext<PWAContextType | null>(null);
 
-const getNotificationPermission = (): NotificationPermission => {
-  return typeof Notification !== "undefined"
-    ? Notification.permission
-    : "default";
-};
-
-export function PWAManager() {
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-
-  const [mounted, setMounted] = useState(false);
+export function PWAProvider({ children }: { children: React.ReactNode }) {
+  const [permission, setPermission] =
+    useState<NotificationPermission>("default");
   const [subscription, setSubscription] = useState<PushSubscription | null>(
     null
   );
   const [loading, setLoading] = useState(false);
 
+  const pushSupported = isPushSupported();
+
   useEffect(() => {
+    setPermission(getNotificationPermission());
+    if (!pushSupported) return;
+
+    const initServiceWorker = async () => {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        });
+        const existingSubscription =
+          await registration.pushManager.getSubscription();
+        if (existingSubscription) {
+          setSubscription(existingSubscription);
+        }
+      } catch (error) {
+        console.error("Service Worker registration failed:", error);
+      }
+    };
+
+    initServiceWorker();
+  }, [pushSupported]);
+
+  const subscribe = useCallback(async () => {
+    if (!pushSupported || subscription || loading) return;
+
+    setLoading(true);
+    try {
+      const perm = await Notification.requestPermission();
+      setPermission(perm);
+      if (perm !== "granted") {
+        throw new Error("Permission not granted");
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        throw new Error("VAPID public key not configured");
+      }
+
+      const newSubscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+
+      setSubscription(newSubscription);
+      await subscribeUser(newSubscription.toJSON() as PushSubscriptionJSON);
+      console.log("Successfully subscribed to push notifications");
+    } catch (error) {
+      console.error("Subscription failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [pushSupported, subscription, loading]);
+
+  const unsubscribe = useCallback(async () => {
+    if (!subscription || loading) return;
+
+    setLoading(true);
+    try {
+      await subscription.unsubscribe();
+      await unsubscribeUser(subscription.endpoint);
+      setSubscription(null);
+      console.log("Successfully unsubscribed from push notifications");
+    } catch (error) {
+      console.error("Unsubscription failed:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [subscription, loading]);
+
+  const value = useMemo(
+    () => ({
+      isPushSupported: pushSupported,
+      permission,
+      subscription,
+      subscribe,
+      unsubscribe,
+      loading,
+    }),
+    [pushSupported, permission, subscription, subscribe, unsubscribe, loading]
+  );
+
+  return <PWAContext.Provider value={value}>{children}</PWAContext.Provider>;
+}
+
+export const usePWA = () => {
+  const context = useContext(PWAContext);
+  if (!context) {
+    throw new Error("usePWA must be used within a PWAProvider");
+  }
+  return context;
+};
+
+export function PWAManager() {
+  // PWA Install state
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  const {
+    isPushSupported: pushSupported,
+    permission,
+    subscription,
+    subscribe,
+    unsubscribe,
+    loading,
+  } = usePWA();
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
 
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -72,31 +180,6 @@ export function PWAManager() {
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-
-    if (isPushSupported()) {
-      const initServiceWorker = async () => {
-        try {
-          const registration = await navigator.serviceWorker.register(
-            "/sw.js",
-            {
-              scope: "/",
-              updateViaCache: "none",
-            }
-          );
-
-          const existingSubscription =
-            await registration.pushManager.getSubscription();
-          if (existingSubscription) {
-            setSubscription(existingSubscription);
-          }
-        } catch (error) {
-          console.error("Service Worker registration failed:", error);
-        }
-      };
-
-      initServiceWorker();
-    }
-
     return () => {
       window.removeEventListener(
         "beforeinstallprompt",
@@ -105,78 +188,26 @@ export function PWAManager() {
     };
   }, []);
 
-  // const handleInstallClick = async () => {
-  //   if (!deferredPrompt) return;
-
-  //   try {
-  //     await deferredPrompt.prompt();
-  //     const { outcome } = await deferredPrompt.userChoice;
-  //     console.log(`User response to install prompt: ${outcome}`);
-  //     setDeferredPrompt(null);
-  //   } catch (error) {
-  //     console.error("Error showing install prompt:", error);
-  //   }
-  // };
-
-  const subscribe = useCallback(async () => {
-    if (subscription || loading) return;
-
-    setLoading(true);
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
-      if (!vapidPublicKey) {
-        throw new Error("VAPID public key not configured");
-      }
-
-      const newSubscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
-
-      setSubscription(newSubscription);
-
-      const serializedSub = JSON.parse(
-        JSON.stringify(newSubscription)
-      ) as PushSubscriptionJSON;
-
-      await subscribeUser(serializedSub);
-      console.log("Successfully subscribed to push notifications");
+      await deferredPrompt.prompt();
+      setDeferredPrompt(null);
     } catch (error) {
-      console.error("Subscription failed:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error showing install prompt:", error);
     }
-  }, [subscription, loading]);
-
-  const unsubscribe = useCallback(async () => {
-    if (!subscription || loading) return;
-
-    setLoading(true);
-    try {
-      await subscription.unsubscribe();
-      await unsubscribeUser(subscription.endpoint);
-      setSubscription(null);
-      console.log("Successfully unsubscribed from push notifications");
-    } catch (error) {
-      console.error("Unsubscription failed:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [subscription, loading]);
+  };
 
   if (!mounted) return null;
 
   const isAndroid = /Android/i.test(navigator.userAgent);
   const isMobileBrowser = isIOS || isAndroid;
-
-  const isSupported = isPushSupported();
-  const permission = getNotificationPermission();
   const isBlocked = permission === "denied";
   const isSubscribed = !!subscription;
+
   const showInstallPrompt =
-    !isStandalone && (isIOS || isAndroid || deferredPrompt);
+    !isStandalone && (isIOS || isAndroid || !!deferredPrompt);
+
 
   const showSubscribeButton = !isMobileBrowser || isStandalone;
 
@@ -186,7 +217,7 @@ export function PWAManager() {
         <div className="space-y-2 text-center font-deco-regular">
           <h3 className="text-lg font-semibold text-zinc-300">Install App</h3>
 
-          {/* {!deferredPrompt && (
+          {deferredPrompt && (
             <Button
               onClick={handleInstallClick}
               variant="outline"
@@ -194,7 +225,7 @@ export function PWAManager() {
             >
               Add to Home Screen
             </Button>
-          )} */}
+          )}
 
           {isIOS && !deferredPrompt && (
             <p className="px-10 text-sm text-muted-foreground">
@@ -234,12 +265,11 @@ export function PWAManager() {
         </div>
       )}
 
-      {isSupported && showSubscribeButton ? (
+      {pushSupported && showSubscribeButton ? (
         <div className="text-center font-deco-regular">
           <h3 className="mb-2 text-lg text-white font-semibold">
             Push Notifications
           </h3>
-
           {isSubscribed ? (
             <div className="space-y-3.5">
               <p className="text-sm text-muted-foreground">
@@ -261,7 +291,6 @@ export function PWAManager() {
                   ? "Notifications are blocked."
                   : "Subscribe to get notified."}
               </p>
-
               {isBlocked ? (
                 <p className="text-sm text-muted-foreground">
                   Enable notifications in your browser settings.

@@ -10,16 +10,18 @@ import { Title } from "@/components/title";
 import { Quote } from "@/components/quote";
 import { Timer } from "@/components/timer";
 
-import { PWAManager } from "@/components/pwa-manager";
+import { PWAManager, PWAProvider } from "@/components/pwa-manager";
 
-import { TimeLeft, useCountdown } from "@/hooks/use-countdown";
+import { useCountdown } from "@/hooks/use-countdown";
 import { useNotifications } from "@/hooks/use-notifications";
 
 function PageContent() {
   const deadline = new Date("2026-11-19T00:00:00Z");
   const { timeLeft, isExpired, offset } = useCountdown(deadline);
 
-  useNotifications(deadline, timeLeft as TimeLeft, offset);
+  useNotifications(deadline, timeLeft, offset, {
+    title: "Grand Theft Auto VI",
+  });
 
   return (
     <div
@@ -61,7 +63,9 @@ function PageContent() {
 export default function Page() {
   return (
     <Suspense>
-      <PageContent />
+      <PWAProvider>
+        <PageContent />
+      </PWAProvider>
     </Suspense>
   );
 }
