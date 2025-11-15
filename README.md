@@ -18,8 +18,17 @@ yarn install
 # OR  
 pnpm install  
 
+# this project use neon postgres, prisma and web-push
+web-push generate-vapid-keys
+
+get Database_url from neon
+
+bunx prisma generate
+bunx prisma db push
+
+
 # run in development 
-# Use next dev --experimental-https for testing
+# ese next dev --experimental-https for testing
 bun dev:https
 ```
 
