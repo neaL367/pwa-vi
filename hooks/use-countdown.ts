@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getTime } from "@/lib/time";
 
 export interface TimeLeft {
   days: number;
@@ -45,15 +44,25 @@ export function useCountdown(deadline: Date) {
   );
 
   useEffect(() => {
-    getTime().then((offset) => setOffset(offset));
+    const syncTime = async () => {
+      try {
+        const res = await fetch("/api/time");
+        const data = await res.json();
+        setOffset(data.now - Date.now());
+      } catch (err) {
+        console.error("Failed to sync server time:", err);
+      }
+    };
+    syncTime();
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(calculateTimeLeft(target, offset));
     }, 1000);
+
     return () => clearInterval(timer);
   }, [target, offset]);
 
-  return { timeLeft, isExpired: isExpired(timeLeft), offset};
+  return { timeLeft, isExpired: isExpired(timeLeft), offset };
 }

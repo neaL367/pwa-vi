@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { TimeLeft } from "./use-countdown";
 import { sendNotification } from "@/server/actions";
+import { TimeLeft } from "./use-countdown";
 
 interface NotificationItem {
   body: string;
@@ -21,7 +21,6 @@ const NOTIFICATION_THRESHOLDS = {
 const getRemaining = (deadline: Date, offset: number) => {
   const now = Date.now() + offset;
   const diff = deadline.getTime() - now;
-
   if (diff <= 0) return null;
 
   const days = Math.floor(diff / 86400000);
@@ -40,7 +39,7 @@ const getPendingNotifications = (
 
   const { diff, days, hours, minutes } = r;
 
-  if (diff <= 1000) {
+  if (diff <= 1000)
     return [
       {
         body: "Grand Theft Auto VI is available now!",
@@ -48,9 +47,8 @@ const getPendingNotifications = (
         requireInteraction: true,
       },
     ];
-  }
 
-  if (days === 0 && NOTIFICATION_THRESHOLDS.MINUTES.includes(minutes)) {
+  if (days === 0 && NOTIFICATION_THRESHOLDS.MINUTES.includes(minutes))
     return [
       {
         body: `Only ${minutes} minute${
@@ -59,52 +57,46 @@ const getPendingNotifications = (
         key: `min${minutes}`,
       },
     ];
-  }
 
-  if (days === 0 && NOTIFICATION_THRESHOLDS.HOURS.includes(hours)) {
+  if (days === 0 && NOTIFICATION_THRESHOLDS.HOURS.includes(hours))
     return [
       {
         body: `${hours} hour${hours > 1 ? "s" : ""} until GTA VI release!`,
         key: `h${hours}`,
       },
     ];
-  }
 
-  if (days > 0 && NOTIFICATION_THRESHOLDS.DAYS.includes(days)) {
+  if (days > 0 && NOTIFICATION_THRESHOLDS.DAYS.includes(days))
     return [
       {
         body: `${days} day${days > 1 ? "s" : ""} until GTA VI release!`,
         key: `d${days}`,
       },
     ];
-  }
 
   const weeks = Math.ceil(days / 7);
-  if (weeks <= 4 && NOTIFICATION_THRESHOLDS.WEEKS.includes(weeks)) {
+  if (weeks <= 4 && NOTIFICATION_THRESHOLDS.WEEKS.includes(weeks))
     return [
       {
         body: `${weeks} week${weeks > 1 ? "s" : ""} until GTA VI release!`,
         key: `w${weeks}`,
       },
     ];
-  }
 
   const months = Math.ceil(days / 30);
-  if (months >= 2 && NOTIFICATION_THRESHOLDS.MONTHS.includes(months)) {
+  if (months >= 2 && NOTIFICATION_THRESHOLDS.MONTHS.includes(months))
     return [
       {
         body: `${months} month${months > 1 ? "s" : ""} until GTA VI release!`,
         key: `m${months}`,
       },
     ];
-  }
 
   return [];
 };
 
 const isNotificationSupported = () =>
   typeof window !== "undefined" && "Notification" in window;
-
 const isPushSupported = () =>
   typeof window !== "undefined" &&
   "serviceWorker" in navigator &&
@@ -122,10 +114,8 @@ export function useNotifications(
 
   useEffect(() => {
     if (!isNotificationSupported()) return;
-
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsSupported(true);
-
     if (!isPushSupported()) return;
 
     const initPush = async () => {
@@ -136,23 +126,15 @@ export function useNotifications(
         if (sub) setPushSubscription(sub);
       } catch {}
     };
-
     initPush();
   }, []);
 
   useEffect(() => {
-    if (
-      !isSupported ||
-      typeof Notification === "undefined" ||
-      Notification.permission !== "granted"
-    ) {
-      return;
-    }
+    if (!isSupported || Notification.permission !== "granted") return;
 
     const pending = getPendingNotifications(deadline, offset).filter(
       (n) => !notified.includes(n.key)
     );
-
     if (pending.length === 0) return;
 
     const t = setTimeout(() => {
@@ -164,22 +146,13 @@ export function useNotifications(
           tag: n.key,
           requireInteraction: n.requireInteraction,
         });
-
-        if (pushSubscription) {
-          sendNotification(n.body).catch(() => {});
-        }
+        if (pushSubscription) sendNotification(n.body).catch(() => {});
       });
-
       setNotified((prev) => [...prev, ...pending.map((n) => n.key)]);
     }, 0);
 
     return () => clearTimeout(t);
   }, [timeLeft, notified, deadline, isSupported, pushSubscription, offset]);
 
-  return {
-    isSupported,
-    hasPermission:
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted",
-  };
+  return { isSupported, hasPermission: Notification.permission === "granted" };
 }
