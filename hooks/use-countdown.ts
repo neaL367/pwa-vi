@@ -38,7 +38,7 @@ const isExpired = (left: TimeLeft) =>
 
 export function useCountdown(deadline: Date) {
   const target = deadline.getTime();
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>(
     calculateTimeLeft(target, 0)
   );
@@ -51,12 +51,15 @@ export function useCountdown(deadline: Date) {
         setOffset(data.now - Date.now());
       } catch (err) {
         console.error("Failed to sync server time:", err);
+        setOffset(0);
       }
     };
     syncTime();
   }, []);
 
   useEffect(() => {
+    if (offset === null) return;
+
     const timer = setInterval(() => {
       setTimeLeft(calculateTimeLeft(target, offset));
     }, 1000);
@@ -64,5 +67,9 @@ export function useCountdown(deadline: Date) {
     return () => clearInterval(timer);
   }, [target, offset]);
 
-  return { timeLeft, isExpired: isExpired(timeLeft), offset };
+  return {
+    timeLeft,
+    isExpired: isExpired(timeLeft), 
+    offset: offset ?? 0,
+  };
 }

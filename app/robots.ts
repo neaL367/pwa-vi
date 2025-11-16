@@ -1,18 +1,19 @@
-import type { MetadataRoute } from 'next'
- 
+import type { MetadataRoute } from "next";
+import { baseUrl } from "./sitemap";
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
-        userAgent: 'Googlebot',
-        allow: ['/'],
-        disallow: '/private/',
+        userAgent: "Googlebot",
+        allow: ["/"],
+        disallow: "/private/",
       },
       {
-        userAgent: ['Applebot', 'Bingbot'],
-        disallow: ['/'],
+        userAgent: ["Applebot", "Bingbot"],
+        disallow: ["/"],
       },
     ],
-    sitemap: 'https://pwa-vi.vercel.app/sitemap.xml',
-  }
+    sitemap: `${baseUrl}/sitemap.xml`,
+  };
 }

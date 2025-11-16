@@ -3,9 +3,9 @@
 import { Suspense } from "react";
 import { cn } from "@/lib/cn";
 
-import { LogoVI } from "@/components/logo-vi";
-import { LogoPlayStation } from "@/components/logo-playstation";
-import { LogoXbox } from "@/components/logo-xbox";
+import { LogoVI } from "@/components/logo/logo-vi";
+import { LogoPlayStation } from "@/components/logo/logo-playstation";
+import { LogoXbox } from "@/components/logo/logo-xbox";
 import { Title } from "@/components/title";
 import { Quote } from "@/components/quote";
 import { Timer } from "@/components/timer";
@@ -17,7 +17,7 @@ import { useCountdown } from "@/hooks/use-countdown";
 import { useNotifications } from "@/hooks/use-notifications";
 
 function PageContent() {
-  const deadline = new Date("2026-11-19T00:00:00+07:00");
+  const deadline = new Date("2026-11-19T12:00:00+07:00");
   const { timeLeft, isExpired, offset } = useCountdown(deadline);
 
   useNotifications(deadline, timeLeft, offset);
@@ -31,7 +31,7 @@ function PageContent() {
     >
       <div
         className={cn(
-          `px-[12.8px] sm:px-[17px] md:px-[28.8px] mb-1`,
+          `px-[12.8px] sm:px-[17px] md:px-[28.8px]`,
           `flex flex-col items-center text-center font-deco-bold`
         )}
       >

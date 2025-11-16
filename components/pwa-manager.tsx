@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
-import { AndroidMenuIcon, IosShareIcon } from "./icon-pwa";
+import { AndroidMenuIcon, IosShareIcon } from "./icons/icon-pwa";
 import { usePWA } from "./pwa-context";
 
 

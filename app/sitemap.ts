@@ -1,12 +1,14 @@
-import type { MetadataRoute } from 'next'
- 
+import type { MetadataRoute } from "next";
+
+export const baseUrl = "https://pwa-vi.vercel.app";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: 'https://pwa-vi.vercel.app',
+      url: baseUrl,
       lastModified: new Date(),
-      changeFrequency: 'always',
+      changeFrequency: "always",
       priority: 1,
     },
-  ]
+  ];
 }

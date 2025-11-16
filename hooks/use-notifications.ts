@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { sendNotification } from "@/server/actions";
 import { TimeLeft } from "./use-countdown";
 import {
@@ -21,20 +21,16 @@ export function useNotifications(
   timeLeft: TimeLeft,
   offset: number
 ) {
-  const [notified, setNotified] = useState<string[]>([]);
+  const notifiedRef = useRef<string[]>([]);
   const [isSupported, setIsSupported] = useState(false);
   const [pushSubscription, setPushSubscription] =
     useState<PushSubscription | null>(null);
 
   useEffect(() => {
-    if (!isNotificationSupported()) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsSupported(false);
-      return;
-    }
-    setIsSupported(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsSupported(isNotificationSupported());
 
-    if (!isPushSupported()) return;
+    if (!isNotificationSupported() || !isPushSupported()) return;
 
     const initPush = async () => {
       try {
@@ -58,10 +54,9 @@ export function useNotifications(
       return;
 
     const remaining = getRemaining(deadline, offset);
-
     const key = getPendingNotificationKey(remaining);
 
-    if (key && !notified.includes(key)) {
+    if (key && !notifiedRef.current.includes(key)) {
       const item = createNotificationItem(key);
 
       new Notification("Grand Theft Auto VI", {
@@ -78,10 +73,9 @@ export function useNotifications(
         });
       }
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setNotified((prev) => [...prev, key]);
+      notifiedRef.current.push(key);
     }
-  }, [timeLeft, notified, deadline, isSupported, pushSubscription, offset]);
+  }, [timeLeft, deadline, isSupported, pushSubscription, offset]);
 
   return {
     isSupported,
