@@ -21,6 +21,16 @@ const serwist = new Serwist({
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: defaultCache,
+  fallbacks: {
+    entries: [
+      {
+        url: "/~offline",
+        matcher({ request }) {
+          return request.destination === "document";
+        },
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();
@@ -43,14 +53,16 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   if (url.pathname.startsWith("/api/time")) {
-    event.respondWith((async () => {
-      try {
-        return await fetch(event.request);
-      } catch {
-        return Response.error();
-      }
-    })());
-    return; 
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(event.request);
+        } catch {
+          return Response.error();
+        }
+      })()
+    );
+    return;
   }
 });
 
