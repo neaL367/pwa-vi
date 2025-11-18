@@ -45,7 +45,7 @@ export const getPendingNotificationKey = (r: RemainingTime): string | null => {
   if (weeks <= 4 && NOTIFICATION_THRESHOLDS.WEEKS.includes(weeks)) {
     return `w${weeks}`;
   }
-  const months = Math.ceil(days / 30);
+  const months = Math.floor(days / 30);
   if (months >= 2 && NOTIFICATION_THRESHOLDS.MONTHS.includes(months)) {
     return `m${months}`;
   }
