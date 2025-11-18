@@ -15,6 +15,15 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: siteConfig.title,
   description: siteConfig.description,
+  manifest: "/manifest.json",
+  formatDetection: {
+    telephone: false,
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: siteConfig.title,
+  },
   icons: [
     {
       url: "favicon.ico",
@@ -38,7 +47,7 @@ export const metadata: Metadata = {
         url: `${siteConfig.url}/opengraph-image.png`,
         width: 1200,
         height: 630,
-        alt: siteConfig.title, 
+        alt: siteConfig.title,
       },
     ],
   },

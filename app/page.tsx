@@ -16,6 +16,8 @@ import { PWAProvider } from "@/components/pwa-context";
 import { useCountdown } from "@/hooks/use-countdown";
 import { useNotifications } from "@/hooks/use-notifications";
 
+import logo from "/public/vi-logo.png";
+
 function PageContent() {
   const deadline = new Date(2026, 10, 19, 0, 0, 0);
   const { timeLeft, isExpired, offset } = useCountdown(deadline);
@@ -36,7 +38,7 @@ function PageContent() {
         )}
       >
         <div className="flex flex-col items-center gap-[calc(clamp(6vh,11vw,6vh)*.4)]">
-          <LogoVI />
+          <LogoVI src={logo} />
           <div
             className={cn(
               `w-[calc(clamp(8vh,8vw,10vh)*3)] h-[calc(clamp(8vh,8vw,10vh)*0.22)]`,

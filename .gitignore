@@ -43,3 +43,7 @@ next-env.d.ts
 
 certificates
 /app/generated/prisma
+
+# Serwist
+public/sw*
+public/swe-worker*

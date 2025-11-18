@@ -1,16 +1,16 @@
 "use client";
 
-import Image from "next/image";
+import Image, { StaticImageData } from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 
-export function LogoVI() {
+export function LogoVI({ src }: { src: string | StaticImageData }) {
   const [load, setLoad] = useState(false);
 
   return (
     <div className="w-[clamp(20vh,25%,30vh)] h-full flex items-center justify-center">
       <Image
-        src="https://www.rockstargames.com/VI/_next/static/media/vi.b9b99ab9.png"
+        src={src}
         width={807}
         height={540}
         alt="vi logo"
@@ -20,7 +20,9 @@ export function LogoVI() {
         className={cn(
           `w-full h-auto`,
           `transition-all ease-out duration-700`,
-          `${load ? "blur-0 opacity-100 scale-100" : "blur-lg opacity-0 scale-95"}`
+          `${
+            load ? "blur-0 opacity-100 scale-100" : "blur-lg opacity-0 scale-95"
+          }`
         )}
       />
     </div>
