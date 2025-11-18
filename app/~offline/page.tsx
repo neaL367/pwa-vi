@@ -10,9 +10,6 @@ import { Title } from "@/components/title";
 import { Quote } from "@/components/quote";
 import { Timer } from "@/components/timer";
 
-import { PWAManager } from "@/components/pwa-manager";
-import { PWAProvider } from "@/components/pwa-context";
-
 import { useCountdown } from "@/hooks/use-countdown";
 import { useNotifications } from "@/hooks/use-notifications";
 
@@ -55,9 +52,7 @@ function PageContent() {
       </div>
 
       <div className="mt-12 flex gap-6 flex-col justify-center">
-        <PWAProvider>
-          <PWAManager />
-        </PWAProvider>
+        <p>Notification is not avaliable while you are offline.</p>
       </div>
     </div>
   );
