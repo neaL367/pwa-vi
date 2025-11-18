@@ -1,10 +1,10 @@
-// components/pwa-context.tsx
 "use client";
 
-import React, {
+import {
   useState,
   useEffect,
   useCallback,
+  createContext,
   useContext,
   useMemo,
   ReactNode,
@@ -12,11 +12,10 @@ import React, {
 import { subscribeUser, unsubscribeUser } from "@/server/actions";
 import { PushSubscriptionJSON } from "@/server/webpush";
 import {
-  isPushSupported as _isPushSupported,
+  isPushSupported,
   getNotificationPermission,
   urlBase64ToUint8Array,
 } from "@/lib/pwa";
-import { useOnlineStatus } from "@/hooks/use-onlinestatus";
 
 interface PWAContextType {
   isPushSupported: boolean;
@@ -24,11 +23,10 @@ interface PWAContextType {
   subscription: PushSubscription | null;
   subscribe: () => Promise<void>;
   unsubscribe: () => Promise<void>;
-  isOnline: boolean;
   loading: boolean;
 }
 
-const PWAContext = React.createContext<PWAContextType | null>(null);
+const PWAContext = createContext<PWAContextType | null>(null);
 
 export function PWAProvider({ children }: { children: ReactNode }) {
   const [permission, setPermission] =
@@ -38,35 +36,33 @@ export function PWAProvider({ children }: { children: ReactNode }) {
   );
   const [loading, setLoading] = useState(false);
 
-  const isOnline = useOnlineStatus(); 
-  const isPushSupported = _isPushSupported();
+  const pushSupported = isPushSupported();
 
   useEffect(() => {
     setPermission(getNotificationPermission());
-    if (!isPushSupported) return;
+    if (!pushSupported) return;
 
-    const initSW = async () => {
+    const initServiceWorker = async () => {
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js", {
+        const registration = await navigator.serviceWorker.register("/sw.js", {
           scope: "/",
           updateViaCache: "none",
         });
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) {
-          setSubscription(existing);
+        const existingSubscription =
+          await registration.pushManager.getSubscription();
+        if (existingSubscription) {
+          setSubscription(existingSubscription);
         }
-      } catch (err) {
-        console.error("SW registration failed:", err);
+      } catch (error) {
+        console.error("Service Worker registration failed:", error);
       }
     };
 
-    initSW();
-  }, [isPushSupported]);
+    initServiceWorker();
+  }, [pushSupported]);
 
   const subscribe = useCallback(async () => {
-    if (!isPushSupported || subscription || loading || !isOnline) {
-      return;
-    }
+    if (!pushSupported || subscription || loading) return;
 
     setLoading(true);
     try {
@@ -76,24 +72,26 @@ export function PWAProvider({ children }: { children: ReactNode }) {
         throw new Error("Permission not granted");
       }
 
-      const reg = await navigator.serviceWorker.ready;
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) throw new Error("VAPID key missing");
+      const registration = await navigator.serviceWorker.ready;
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        throw new Error("VAPID public key not configured");
+      }
 
-      const newSub = await reg.pushManager.subscribe({
+      const newSubscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
 
-      setSubscription(newSub);
-      await subscribeUser(newSub.toJSON() as PushSubscriptionJSON);
-      console.log("Subscribed");
-    } catch (err) {
-      console.error("Subscribe error:", err);
+      setSubscription(newSubscription);
+      await subscribeUser(newSubscription.toJSON() as PushSubscriptionJSON);
+      console.log("Successfully subscribed to push notifications");
+    } catch (error) {
+      console.error("Subscription failed:", error);
     } finally {
       setLoading(false);
     }
-  }, [isPushSupported, subscription, loading, isOnline]);
+  }, [pushSupported, subscription, loading]);
 
   const unsubscribe = useCallback(async () => {
     if (!subscription || loading) return;
@@ -103,9 +101,9 @@ export function PWAProvider({ children }: { children: ReactNode }) {
       await subscription.unsubscribe();
       await unsubscribeUser(subscription.endpoint);
       setSubscription(null);
-      console.log("Unsubscribed");
-    } catch (err) {
-      console.error("Unsubscribe error:", err);
+      console.log("Successfully unsubscribed from push notifications");
+    } catch (error) {
+      console.error("Unsubscription failed:", error);
     } finally {
       setLoading(false);
     }
@@ -113,30 +111,23 @@ export function PWAProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      isPushSupported,
+      isPushSupported: pushSupported,
       permission,
       subscription,
       subscribe,
       unsubscribe,
-      isOnline,
       loading,
     }),
-    [
-      isPushSupported,
-      permission,
-      subscription,
-      subscribe,
-      unsubscribe,
-      isOnline,
-      loading,
-    ]
+    [pushSupported, permission, subscription, subscribe, unsubscribe, loading]
   );
 
   return <PWAContext.Provider value={value}>{children}</PWAContext.Provider>;
 }
 
-export function usePWA() {
-  const ctx = useContext(PWAContext);
-  if (!ctx) throw new Error("usePWA must be used inside PWAProvider");
-  return ctx;
-}
+export const usePWA = () => {
+  const context = useContext(PWAContext);
+  if (!context) {
+    throw new Error("usePWA must be used within a PWAProvider");
+  }
+  return context;
+};
