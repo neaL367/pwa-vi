@@ -42,61 +42,74 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
+  // If client is requesting server time, forward to network (avoid cache)
   if (url.pathname.startsWith("/api/time")) {
     event.respondWith(
       (async () => {
         try {
-          return await fetch(event.request);
+          // attempt network fetch without cache to return current time
+          const resp = await fetch(event.request);
+          return resp;
         } catch {
+          // fallback to network error response
           return Response.error();
         }
       })()
     );
     return;
   }
+
+  // Otherwise let Serwist handle runtime caching as configured.
+  // (serwist already installed listeners via addEventListeners())
 });
 
-// to support dynamic caching via messages
+// support message-based dynamic caching / prefetching
 self.addEventListener("message", (event) => {
-  serwist.handleCache(event);
+  // allow app to pass { type: 'CACHE_URLS', urls: [...] }
+  try {
+    serwist.handleCache(event);
+  } catch {
+    // ignore
+  }
 });
 
-self.addEventListener("push", (event: PushEvent) => {
-  if (event.data) {
+// push handler (server-sent)
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  try {
     const data = event.data.json();
-    const options: NotificationOptions = {
+    const options = {
       body: data.body,
-      icon: data.icon ?? "/icon.png",
-      badge: data.badge ?? "/badge.png",
-      data: {
-        url: data.data?.url ?? "/",
-        primaryKey: data.data?.primaryKey ?? "1",
-      },
+      icon: data.icon || "/apple-touch-icon.png",
+      badge: data.badge || "/apple-touch-icon.png",
+      data: data.data || {},
     };
-
-    event.waitUntil(self.registration.showNotification(data.title, options));
+    event.waitUntil(
+      self.registration.showNotification(data.title || "Notification", options)
+    );
+  } catch {
+    // malformed payload
   }
 });
 
-self.addEventListener("notificationclick", (event: NotificationEvent) => {
+self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  if (event.action === "close") {
-    return;
-  }
-
-  const urlToOpen = event.notification.data?.url ?? "/";
+  const urlToOpen = event.notification.data?.url || "/";
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
-        for (const client of clients) {
-          if ("url" in client && client.url === urlToOpen) {
-            return client.focus();
-          }
+    (async () => {
+      const allClients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      // focus if exists or open
+      for (const client of allClients) {
+        if ("url" in client && client.url === urlToOpen) {
+          return client.focus();
         }
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(urlToOpen);
-        }
-      })
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(urlToOpen);
+      }
+    })()
   );
 });

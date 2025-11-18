@@ -1,3 +1,4 @@
+// server/actions.ts
 "use server";
 
 import { neon } from "@neondatabase/serverless";
@@ -17,6 +18,12 @@ interface NotificationResult {
   error?: string;
 }
 
+interface PushSubscriptionRecord {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
 export async function subscribeUser(
   sub: PushSubscriptionJSON,
   userId?: string
@@ -24,20 +31,13 @@ export async function subscribeUser(
   try {
     await sql`
       INSERT INTO pushSubscription (id, endpoint, p256dh, auth, "userId")
-      VALUES (
-        gen_random_uuid(), 
-        ${sub.endpoint}, 
-        ${sub.keys.p256dh}, 
-        ${sub.keys.auth}, 
-        ${userId ?? null}
-      )
-      ON CONFLICT (endpoint)
-      DO UPDATE SET 
-        p256dh = ${sub.keys.p256dh}, 
-        auth = ${sub.keys.auth}, 
-        "userId" = ${userId ?? null}
+      VALUES (gen_random_uuid(), ${sub.endpoint}, ${sub.keys.p256dh}, ${
+      sub.keys.auth
+    }, ${userId ?? null})
+      ON CONFLICT (endpoint) DO UPDATE SET p256dh = ${
+        sub.keys.p256dh
+      }, auth = ${sub.keys.auth}, "userId" = ${userId ?? null}
     `;
-
     return { success: true };
   } catch (error) {
     console.error("Failed to subscribe user:", error);
@@ -45,18 +45,13 @@ export async function subscribeUser(
   }
 }
 
-
 export async function unsubscribeUser(
   endpoint?: string
 ): Promise<SubscriptionResult> {
   try {
     if (endpoint) {
-      await sql`
-        DELETE FROM pushSubscription
-        WHERE endpoint = ${endpoint}
-      `;
+      await sql`DELETE FROM pushSubscription WHERE endpoint = ${endpoint}`;
     }
-
     return { success: true };
   } catch (error) {
     console.error("Failed to unsubscribe user:", error);
@@ -68,10 +63,16 @@ export async function sendNotification(
   message: string
 ): Promise<NotificationResult> {
   try {
-    const subscriptions = await sql`
-      SELECT endpoint, p256dh, auth
-      FROM pushSubscription
-    `;
+    const subscriptionsRaw =
+      await sql`SELECT endpoint, p256dh, auth FROM pushSubscription`;
+
+    const subscriptions: PushSubscriptionRecord[] = subscriptionsRaw.map(
+      (row) => ({
+        endpoint: row.endpoint,
+        p256dh: row.p256dh,
+        auth: row.auth,
+      })
+    );
 
     if (subscriptions.length === 0) {
       return { success: true, sent: 0, failed: 0 };
@@ -107,34 +108,32 @@ export async function sendNotification(
     const failedCount = results.filter((r) => r.status === "rejected").length;
     const successCount = subscriptions.length - failedCount;
 
+    // Clean up invalid subscriptions (410 / 404)
     const failedSubscriptions = subscriptions.filter((_, index) => {
       const result = results[index];
       if (result.status === "rejected") {
-        const error = result.reason;
-        return error?.statusCode === 410 || error?.statusCode === 404;
+        const err = (result as PromiseRejectedResult).reason;
+        const status = err?.statusCode ?? err?.status;
+        return status === 410 || status === 404;
       }
       return false;
     });
 
     if (failedSubscriptions.length > 0) {
       await Promise.all(
-        failedSubscriptions.map((sub) =>
-          sql`DELETE FROM pushSubscription WHERE endpoint = ${sub.endpoint}`
+        failedSubscriptions.map(
+          (sub) =>
+            sql`DELETE FROM pushSubscription WHERE endpoint = ${sub.endpoint}`
         )
       );
-      console.log(`Cleaned up ${failedSubscriptions.length} invalid subscriptions`);
+      console.log(
+        `Cleaned up ${failedSubscriptions.length} invalid subscriptions`
+      );
     }
 
-    return {
-      success: true,
-      sent: successCount,
-      failed: failedCount,
-    };
+    return { success: true, sent: successCount, failed: failedCount };
   } catch (error) {
     console.error("Failed to send notifications:", error);
-    return {
-      success: false,
-      error: "Failed to send notification",
-    };
+    return { success: false, error: "Failed to send notification" };
   }
 }

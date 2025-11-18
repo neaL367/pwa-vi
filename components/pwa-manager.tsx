@@ -1,13 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { usePWA } from "./pwa-context";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { AndroidMenuIcon, IosShareIcon } from "./icons/icon-pwa";
-import { usePWA } from "./pwa-context";
-
 
 export function PWAManager() {
-  const { isPushSupported } = usePWA();
+  const pwa = usePWA();
   const install = usePWAInstall();
 
   if (!install.mounted) return null;
@@ -15,21 +14,19 @@ export function PWAManager() {
   const showInstall =
     !install.isStandalone &&
     (install.canInstall || install.showInstallGuidance);
-
-  
   const showSubscribe =
-    isPushSupported && (!install.isMobile || install.isStandalone);
+    pwa.isPushSupported && (!install.isMobile || install.isStandalone);
 
   return (
     <div className="space-y-8">
       {showInstall && <PWAInstallPrompt />}
       {showSubscribe ? (
         <PWASubscribeControls />
-      ) : isPushSupported && install.isMobile ? (
+      ) : pwa.isPushSupported && install.isMobile ? (
         <p className="text-center text-sm text-muted-foreground">
           Install the app to enable push notifications.
         </p>
-      ) : !isPushSupported ? (
+      ) : !pwa.isPushSupported ? (
         <p className="text-center text-sm text-muted-foreground">
           Push notifications are not supported on this device.
         </p>
@@ -38,17 +35,17 @@ export function PWAManager() {
   );
 }
 
-
 function PWAInstallPrompt() {
-  const { platform, canInstall, triggerInstall } = usePWAInstall();
+  const install = usePWAInstall();
+  const platform = install.platform;
 
   return (
     <div className="space-y-2 text-center font-deco-regular">
       <h3 className="text-lg font-semibold text-zinc-300">Install App</h3>
 
-      {canInstall && (
+      {install.canInstall && (
         <Button
-          onClick={triggerInstall}
+          onClick={install.triggerInstall}
           variant="outline"
           className="rounded-full"
         >
@@ -56,29 +53,28 @@ function PWAInstallPrompt() {
         </Button>
       )}
 
-      {platform === "ios" && !canInstall && (
+      {platform === "ios" && !install.canInstall && (
         <p className="px-10 text-sm text-muted-foreground">
-          To install this app, tap the share button
-          <span role="img" aria-label="share icon">
+          To install this app, tap the share button{" "}
+          <span aria-hidden>
             <IosShareIcon />
-          </span>
+          </span>{" "}
           and then &quot;Add to Home Screen&quot;
         </p>
       )}
 
-      {platform === "android" && !canInstall && (
+      {platform === "android" && !install.canInstall && (
         <p className="px-10 text-sm text-muted-foreground">
-          To install this app, tap the menu button
-          <span role="img" aria-label="menu icon">
+          To install this app, tap the menu button{" "}
+          <span aria-hidden>
             <AndroidMenuIcon />
-          </span>
+          </span>{" "}
           and then &quot;Add to Home Screen&quot; or &quot;Install App&quot;
         </p>
       )}
     </div>
   );
 }
-
 
 function PWASubscribeControls() {
   const { permission, subscription, subscribe, unsubscribe, loading } =
@@ -113,6 +109,7 @@ function PWASubscribeControls() {
               ? "Notifications are blocked."
               : "Subscribe to get notified."}
           </p>
+
           {isBlocked ? (
             <p className="text-sm text-muted-foreground">
               Enable notifications in your browser settings.
