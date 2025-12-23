@@ -1,10 +1,7 @@
-// server/actions.ts
 "use server";
 
-import { neon } from "@neondatabase/serverless";
 import webpush, { PushSubscriptionJSON } from "./webpush";
-
-export const sql = neon(process.env.DATABASE_URL!);
+import { sql } from "@/lib/db";
 
 interface SubscriptionResult {
   success: boolean;

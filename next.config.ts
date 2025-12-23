@@ -1,21 +1,12 @@
-// @ts-check
-import withSerwistInit from "@serwist/next";
+import type { NextConfig } from "next";
 
-const withSerwist = withSerwistInit({
-  // Note: This is only an example. If you use Pages Router,
-  // use something else that works, such as "service-worker/index.ts".
-  cacheOnNavigation: true,
-  swSrc: "app/sw.ts",
-  swDest: "public/sw.js",
-});
-
-/** @type {import("next").NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
   reactStrictMode: true,
-  cacheComponents: true,
+  cacheComponents: false,
   images: {
     unoptimized: true,
   },
+  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev'],
   compiler: {
     removeConsole:
       process.env.NODE_ENV === "production"
@@ -32,6 +23,10 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
         ],
       },
       {
@@ -47,16 +42,7 @@ const nextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "connect-src 'self' https://va.vercel-scripts.com",
-              // Allow eval in development if needed
-              `script-src 'self' ${
-                process.env.NODE_ENV !== "production" ? "'unsafe-eval'" : ""
-              }`,
-            ]
-              .filter(Boolean)
-              .join("; "),
+            value: "default-src 'self'; script-src 'self'",
           },
         ],
       },
@@ -64,4 +50,4 @@ const nextConfig = {
   },
 };
 
-export default withSerwist(nextConfig);
+export default nextConfig;
