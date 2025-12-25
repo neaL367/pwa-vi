@@ -2,11 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  cacheComponents: false,
+  cacheComponents: true,
+  typedRoutes: true,
   images: {
     unoptimized: true,
   },
-  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev'],
+  typescript: {
+    ignoreBuildErrors: false,
+    tsconfigPath: "tsconfig.json",
+  },
   compiler: {
     removeConsole:
       process.env.NODE_ENV === "production"
@@ -20,12 +24,17 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
           },
         ],
       },

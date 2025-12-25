@@ -1,9 +1,65 @@
-export async function GET() {
-  return new Response(JSON.stringify({ now: Date.now() }), {
-    status: 200,
-    headers: {
-      "Cache-Control": "no-store, max-age=0",
-      "Content-Type": "application/json",
-    },
+import { NextResponse } from "next/server";
+import { sendNotification } from "../../actions";
+
+const TARGET_DATE = new Date("2026-11-19T00:00:00Z");
+
+const MILLISECONDS = {
+  MINUTE: 60 * 1000,
+  HOUR: 60 * 60 * 1000,
+  DAY: 24 * 60 * 60 * 1000,
+  WEEK: 7 * 24 * 60 * 60 * 1000,
+  MONTH: 30.44 * 24 * 60 * 60 * 1000, 
+};
+
+const MILESTONES = [
+  { label: "9 Months to go!", ms: 9 * MILLISECONDS.MONTH },
+  { label: "2 Months to go!", ms: 2 * MILLISECONDS.MONTH },
+  { label: "4 Weeks to go!", ms: 4 * MILLISECONDS.WEEK },
+  { label: "2 Weeks to go!", ms: 2 * MILLISECONDS.WEEK },
+  { label: "7 Days to go!", ms: 7 * MILLISECONDS.DAY },
+  { label: "2 Days to go!", ms: 2 * MILLISECONDS.DAY },
+  { label: "24 Hours left!", ms: 24 * MILLISECONDS.HOUR },
+  { label: "12 Hours left!", ms: 12 * MILLISECONDS.HOUR },
+  { label: "6 Hours left!", ms: 6 * MILLISECONDS.HOUR },
+  { label: "3 Hours left!", ms: 3 * MILLISECONDS.HOUR },
+  { label: "1 Hour left!", ms: 1 * MILLISECONDS.HOUR },
+  { label: "60 Minutes left!", ms: 60 * MILLISECONDS.MINUTE },
+  { label: "30 Minutes left!", ms: 30 * MILLISECONDS.MINUTE },
+  { label: "15 Minutes left!", ms: 15 * MILLISECONDS.MINUTE },
+  { label: "5 Minutes left!", ms: 5 * MILLISECONDS.MINUTE },
+  { label: "1 Minute left!", ms: 1 * MILLISECONDS.MINUTE },
+  { label: "GTA VI RELEASED NOW!", ms: 0 },
+];
+
+export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
+  const now = new Date().getTime();
+  const target = TARGET_DATE.getTime();
+  const timeLeft = target - now;
+
+  const TOLERANCE = 60 * 1000; // 1 minute tolerance
+
+  const activeMilestone = MILESTONES.find((m) => {
+    const diff = Math.abs(timeLeft - m.ms);
+    return diff < TOLERANCE;
   });
+
+  if (activeMilestone) {
+    console.log(`Triggering notification: ${activeMilestone.label}`);
+
+    // passing 'null' as the subscription triggers the broadcast to all users
+    const result = await sendNotification(activeMilestone.label, null);
+
+    return NextResponse.json({
+      triggered: true,
+      milestone: activeMilestone.label,
+      result,
+    });
+  }
+
+  return NextResponse.json({ triggered: false, timeLeft });
 }
