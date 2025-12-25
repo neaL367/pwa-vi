@@ -11,10 +11,7 @@ webpush.setVapidDetails(
 
 type PushSubscriptionJSON = {
   endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
+  keys: { p256dh: string; auth: string };
 };
 
 type WebPushError = {
@@ -23,95 +20,103 @@ type WebPushError = {
   body?: string;
 };
 
-export async function subscribeUser(sub: PushSubscriptionJSON) {
-  await sql`
-      INSERT INTO "pushsubscription" (endpoint, p256dh, auth)
-      VALUES (${sub.endpoint}, ${sub.keys.p256dh}, ${sub.keys.auth})
-      ON CONFLICT (endpoint)
-      DO UPDATE SET
-        p256dh = ${sub.keys.p256dh},
-        auth = ${sub.keys.auth}
-    `;
+type ServiceResponse = {
+  success: boolean;
+  message?: string;
+  error?: string;
+};
 
+
+async function saveSubscriptionToDb(sub: PushSubscriptionJSON) {
+  await sql`
+    INSERT INTO "pushsubscription" (endpoint, p256dh, auth)
+    VALUES (${sub.endpoint}, ${sub.keys.p256dh}, ${sub.keys.auth})
+    ON CONFLICT (endpoint)
+    DO UPDATE SET
+      p256dh = ${sub.keys.p256dh},
+      auth = ${sub.keys.auth}
+  `;
+}
+
+async function deleteSubscriptionFromDb(endpoint: string) {
+  await sql`
+    DELETE FROM "pushsubscription"
+    WHERE endpoint = ${endpoint}
+  `;
+}
+
+async function getAllSubscriptions() {
+  const rows = await sql`SELECT endpoint, p256dh, auth FROM "pushsubscription"`;
+  return rows.map((row) => ({
+    endpoint: row.endpoint,
+    keys: { p256dh: row.p256dh, auth: row.auth },
+  })) as PushSubscriptionJSON[];
+}
+
+
+function createPayload(message: string) {
+  return JSON.stringify({
+    title: "GTA VI Countdown",
+    body: message,
+    icon: "/icon.png",
+  });
+}
+
+async function triggerWebPush(sub: PushSubscriptionJSON, payload: string) {
+  try {
+    await webpush.sendNotification(sub, payload);
+    return { success: true };
+  } catch (error) {
+    return handleWebPushError(error, sub.endpoint);
+  }
+}
+
+async function handleWebPushError(error: unknown, endpoint: string) {
+  if (typeof error === "object" && error !== null && "statusCode" in error) {
+    const err = error as WebPushError;
+    if (err.statusCode === 410 || err.statusCode === 404) {
+      console.log("Cleaning up expired:", endpoint);
+      await deleteSubscriptionFromDb(endpoint);
+      return { success: false, error: "Expired" };
+    }
+  }
+  console.error("Push failed:", error);
+  return { success: false, error: "Failed" };
+}
+
+
+export async function subscribeUser(sub: PushSubscriptionJSON) {
+  await saveSubscriptionToDb(sub);
   return { success: true };
 }
 
 export async function unsubscribeUser(sub: PushSubscriptionJSON) {
-  if (!sub?.endpoint) return { success: false, error: "No endpoint provided" };
-
-  await sql`
-      DELETE FROM "pushsubscription"
-      WHERE endpoint = ${sub.endpoint}
-    `;
-
+  if (!sub?.endpoint) return { success: false, error: "No endpoint" };
+  await deleteSubscriptionFromDb(sub.endpoint);
   return { success: true };
 }
 
 export async function sendNotification(
   message: string,
-  sub: PushSubscriptionJSON | null
-) {
-  const payload = JSON.stringify({
-    title: "GTA VI Countdown",
-    body: message,
-    icon: "/icon.png",
-  });
+  targetSub: PushSubscriptionJSON | null
+): Promise<ServiceResponse> {
+  const payload = createPayload(message);
 
-  const sendToSubscription = async (subscription: PushSubscriptionJSON) => {
-    try {
-      await webpush.sendNotification(subscription, payload);
-      return { success: true };
-    } catch (error: unknown) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "statusCode" in error
-      ) {
-        const err = error as WebPushError;
-
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          console.log(
-            "Cleaning up expired subscription:",
-            subscription.endpoint
-          );
-
-          await sql`
-              DELETE FROM "pushsubscription" 
-              WHERE endpoint = ${subscription.endpoint}
-            `;
-          return { success: false, error: "Subscription expired and removed" };
-        }
-      }
-
-      console.error("Error sending push notification:", error);
-      return { success: false, error: "Failed to send" };
-    }
-  };
-
-  // Single User
-  if (sub) {
-    return await sendToSubscription(sub);
+  // 1. Send to Single User for test
+  if (targetSub) {
+    return await triggerWebPush(targetSub, payload);
   }
 
-  // Broadcast
+  // 2. Broadcast to All
   try {
-    const rows =
-      await sql`SELECT endpoint, p256dh, auth FROM "pushsubscription"`;
-
-    const subscriptions = rows.map((row) => ({
-      endpoint: row.endpoint,
-      keys: {
-        p256dh: row.p256dh,
-        auth: row.auth,
-      },
-    })) as PushSubscriptionJSON[];
+    const subscriptions = await getAllSubscriptions();
 
     if (subscriptions.length === 0) {
-      return { success: false, error: "No subscriptions found in DB" };
+      return { success: false, error: "No subscribers" };
     }
 
     const results = await Promise.allSettled(
-      subscriptions.map((s) => sendToSubscription(s))
+      subscriptions.map((s) => triggerWebPush(s, payload))
     );
 
     const successCount = results.filter(
@@ -120,7 +125,7 @@ export async function sendNotification(
 
     return {
       success: true,
-      message: `Sent to ${successCount} of ${subscriptions.length} subscribers`,
+      message: `Sent to ${successCount} of ${subscriptions.length}`,
     };
   } catch (error) {
     console.error("Broadcast failed:", error);

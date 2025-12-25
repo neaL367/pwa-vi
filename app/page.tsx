@@ -15,90 +15,112 @@ interface NavigatorIOS extends Navigator {
 }
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+const SW_PATH = "/sw.js";
 const BG_GRADIENT =
   "bg-linear-[223.17deg,#1c1829,#1b1828_8.61%,#191724_17.21%,#161520_25.82%,#14131c_34.42%,#121218_43.03%,#111117_51.63%]";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
+
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
 }
 
-// Manages Service Worker registration and Push Subscription state.
+function checkPushSupport() {
+  if (typeof window === "undefined" || typeof navigator === "undefined")
+    return false;
+  return "serviceWorker" in navigator && "PushManager" in window;
+}
+
+async function registerServiceWorker() {
+  const registration = await navigator.serviceWorker.register(SW_PATH, {
+    scope: "/",
+    updateViaCache: "none",
+  });
+  return registration;
+}
+
+async function getExistingSubscription() {
+  const registration = await navigator.serviceWorker.ready;
+  return await registration.pushManager.getSubscription();
+}
+
+async function createNewSubscription() {
+  const registration = await navigator.serviceWorker.ready;
+  return await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
+  });
+}
 
 function usePushNotifications() {
   const [subscription, setSubscription] = useState<PushSubscription | null>(
     null
   );
+  const [loading, setLoading] = useState(false);
 
-  // Check browser support safely
   const isSupported = useSyncExternalStore(
     () => () => {},
-    () => "serviceWorker" in navigator && "PushManager" in window,
+    checkPushSupport,
     () => false
   );
 
-  // Sync existing subscription on mount
-  useEffect(() => {
+  const sync = useCallback(async () => {
     if (!isSupported) return;
-
-    async function sync() {
-      try {
-        const registration = await navigator.serviceWorker.register("/sw.js", {
-          scope: "/",
-          updateViaCache: "none",
-        });
-        const sub = await registration.pushManager.getSubscription();
-        setSubscription(sub);
-      } catch (error) {
-        console.error("SW Registration failed:", error);
-      }
+    try {
+      await registerServiceWorker();
+      const sub = await getExistingSubscription();
+      setSubscription(sub);
+    } catch (error) {
+      console.error("Sync failed:", error);
     }
-    sync();
   }, [isSupported]);
+
+  useEffect(() => {
+    sync();
+  }, [sync]);
 
   const subscribe = useCallback(async () => {
     if (!isSupported) return;
+    setLoading(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const sub = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_KEY),
-      });
+      const sub = await createNewSubscription();
       setSubscription(sub);
       await subscribeUser(JSON.parse(JSON.stringify(sub)));
     } catch (error) {
       console.error("Subscription failed:", error);
+    } finally {
+      setLoading(false);
     }
   }, [isSupported]);
 
   const unsubscribe = useCallback(async () => {
     if (!subscription) return;
+    setLoading(true);
     try {
       await unsubscribeUser(JSON.parse(JSON.stringify(subscription)));
       await subscription.unsubscribe();
       setSubscription(null);
     } catch (error) {
       console.error("Unsubscription failed:", error);
+    } finally {
+      setLoading(false);
     }
   }, [subscription]);
 
-  return { isSupported, subscription, subscribe, unsubscribe };
+  return { isSupported, subscription, subscribe, unsubscribe, loading };
 }
-
-
-// Manages PWA installation logic for Android/Desktop and iOS detection.
 
 function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
 
-  // Detect iOS
   const isIOS = useSyncExternalStore(
     () => () => {},
     () => {
@@ -111,7 +133,6 @@ function usePwaInstall() {
     () => false
   );
 
-  // Detect Standalone Mode
   const isStandalone = useSyncExternalStore(
     () => () => {},
     () =>
@@ -120,7 +141,6 @@ function usePwaInstall() {
     () => false
   );
 
-  // Listen for install prompt
   useEffect(() => {
     const handlePrompt = (e: Event) => {
       e.preventDefault();
@@ -135,17 +155,47 @@ function usePwaInstall() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setDeferredPrompt(null);
-    }
+    if (outcome === "accepted") setDeferredPrompt(null);
   };
 
   return { isIOS, isStandalone, deferredPrompt, triggerInstall };
 }
 
+function PushButton({
+  loading,
+  subscribed,
+  onToggle,
+}: {
+  loading: boolean;
+  subscribed: boolean;
+  onToggle: () => void;
+}) {
+  const label = loading
+    ? subscribed
+      ? "Unsubscribing..."
+      : "Subscribing..."
+    : subscribed
+    ? "Unsubscribe"
+    : "Subscribe";
+
+  return (
+    <button
+      onClick={onToggle}
+      disabled={loading}
+      className={cn(
+        "px-4 py-2 rounded-full font-medium transition-all duration-200 bg-white text-black",
+        loading
+          ? "opacity-50 cursor-not-allowed"
+          : "hover:bg-white/90 hover:scale-105 active:scale-95 hover:cursor-pointer"
+      )}
+    >
+      {label}
+    </button>
+  );
+}
 
 function PushNotificationManager() {
-  const { isSupported, subscription, subscribe, unsubscribe } =
+  const { isSupported, subscription, subscribe, unsubscribe, loading } =
     usePushNotifications();
 
   if (!isSupported) {
@@ -166,13 +216,11 @@ function PushNotificationManager() {
           ? "You are subscribed to push notifications."
           : "You are not subscribed to push notifications."}
       </p>
-
-      <button
-        onClick={subscription ? unsubscribe : subscribe}
-        className="px-4 py-2 bg-white text-black hover:bg-white/90 rounded-full hover:cursor-pointer transition-colors duration-200 font-medium"
-      >
-        {subscription ? "Unsubscribe" : "Subscribe"}
-      </button>
+      <PushButton
+        loading={loading}
+        subscribed={!!subscription}
+        onToggle={subscription ? unsubscribe : subscribe}
+      />
     </div>
   );
 }
@@ -181,17 +229,13 @@ function InstallPrompt() {
   const { isIOS, isStandalone, deferredPrompt, triggerInstall } =
     usePwaInstall();
 
-  // If already installed, don't show anything
   if (isStandalone) return null;
-
-  // If it's not iOS and we don't have an install prompt yet (and not standalone), hide
   if (!isIOS && !deferredPrompt) return null;
 
   return (
     <div className="flex flex-col items-center gap-4 p-6 max-w-md mx-auto font-deco-regular">
       <h3 className="text-xl font-semibold text-white mb-2">Install App</h3>
 
-      {/* Android / Desktop Install Button */}
       {deferredPrompt && (
         <button
           onClick={triggerInstall}
@@ -201,18 +245,12 @@ function InstallPrompt() {
         </button>
       )}
 
-      {/* iOS Instructions */}
       {isIOS && (
         <p className="text-white/70 text-sm text-center leading-relaxed">
           To install this app on your iOS device, tap the share button
-          <span role="img" aria-label="share icon" className="mx-1">
-            ⎋
-          </span>
+          <span className="mx-1">⎋</span>
           and then &quot;Add to Home Screen&quot;
-          <span role="img" aria-label="plus icon" className="mx-1">
-            ➕
-          </span>
-          .
+          <span className="mx-1">➕</span>.
         </p>
       )}
     </div>
