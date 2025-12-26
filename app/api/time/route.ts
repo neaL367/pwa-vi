@@ -8,21 +8,33 @@ const MILLISECONDS = {
   HOUR: 60 * 60 * 1000,
   DAY: 24 * 60 * 60 * 1000,
   WEEK: 7 * 24 * 60 * 60 * 1000,
-  MONTH: 30.44 * 24 * 60 * 60 * 1000, 
+  MONTH: 30.44 * 24 * 60 * 60 * 1000,
 };
 
+function createRange(
+  start: number,
+  end: number,
+  unitMs: number,
+  unitLabel: string
+) {
+  // Create an array of length (start - end + 1)
+  return Array.from({ length: start - end + 1 }, (_, i) => {
+    const value = start - i;
+    return {
+      label: `${value} ${unitLabel}${value > 1 ? "s" : ""} to go!`,
+      ms: value * unitMs,
+    };
+  });
+}
+
 const MILESTONES = [
-  { label: "9 Months to go!", ms: 9 * MILLISECONDS.MONTH },
-  { label: "2 Months to go!", ms: 2 * MILLISECONDS.MONTH },
-  { label: "4 Weeks to go!", ms: 4 * MILLISECONDS.WEEK },
-  { label: "2 Weeks to go!", ms: 2 * MILLISECONDS.WEEK },
-  { label: "7 Days to go!", ms: 7 * MILLISECONDS.DAY },
-  { label: "2 Days to go!", ms: 2 * MILLISECONDS.DAY },
+  ...createRange(9, 2, MILLISECONDS.MONTH, "Month"),
+  ...createRange(4, 2, MILLISECONDS.WEEK, "Week"),
+  ...createRange(7, 2, MILLISECONDS.DAY, "Day"),
   { label: "24 Hours left!", ms: 24 * MILLISECONDS.HOUR },
   { label: "12 Hours left!", ms: 12 * MILLISECONDS.HOUR },
   { label: "6 Hours left!", ms: 6 * MILLISECONDS.HOUR },
   { label: "3 Hours left!", ms: 3 * MILLISECONDS.HOUR },
-  { label: "1 Hour left!", ms: 1 * MILLISECONDS.HOUR },
   { label: "60 Minutes left!", ms: 60 * MILLISECONDS.MINUTE },
   { label: "30 Minutes left!", ms: 30 * MILLISECONDS.MINUTE },
   { label: "15 Minutes left!", ms: 15 * MILLISECONDS.MINUTE },
