@@ -30,7 +30,6 @@ function getServerSnapshot() {
   return 0;
 }
 
-
 function TimeUnit({ value, label }: { value: number; label: string }) {
   return (
     <>
@@ -116,13 +115,21 @@ export function Countdown() {
     getServerSnapshot
   );
 
+  const isLoading = currentTime === 0;
   const target = TARGET_DATE.getTime();
   const diff = target - currentTime;
   const isReleased = diff <= 0;
 
   return (
     <CountdownDisplay>
-      {isReleased || currentTime === 0 ? (
+      {isLoading ? (
+        <span className="flex gap-3.5">
+          <SkeletonUnit label="d" />
+          <SkeletonUnit label="h" />
+          <SkeletonUnit label="m" />
+          <SkeletonUnit label="s" />
+        </span>
+      ) : isReleased ? (
         <span>RELEASED NOW!</span>
       ) : (
         <span>
@@ -131,23 +138,30 @@ export function Countdown() {
             label="d"
           />
           <TimeUnit
-            value={Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))}
+            value={Math.floor(
+              (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+            )}
             label="h"
           />
           <TimeUnit
             value={Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))}
             label="m"
           />
-          <TimeUnit
-            value={Math.floor((diff % (1000 * 60)) / 1000)}
-            label="s"
-          />
+          <TimeUnit value={Math.floor((diff % (1000 * 60)) / 1000)} label="s" />
         </span>
       )}
     </CountdownDisplay>
   );
 }
 
+function SkeletonUnit({ label }: { label: string }) {
+  return (
+    <div className="time-unit-skeleton">
+      <span className="value">--</span>
+      <span className="label">{label}</span>
+    </div>
+  );
+}
 
 function ConsoleLogo() {
   return (

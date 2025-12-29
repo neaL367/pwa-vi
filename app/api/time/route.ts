@@ -28,7 +28,7 @@ function createRange(
 }
 
 const MILESTONES = [
-  ...createRange(9, 2, MILLISECONDS.MONTH, "Month"),
+  ...createRange(10, 2, MILLISECONDS.MONTH, "Month"),
   ...createRange(4, 2, MILLISECONDS.WEEK, "Week"),
   ...createRange(7, 2, MILLISECONDS.DAY, "Day"),
   { label: "24 Hours left!", ms: 24 * MILLISECONDS.HOUR },
