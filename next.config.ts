@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    inlineCss: true,
+  },
   typescript: {
     ignoreBuildErrors: false,
     tsconfigPath: "tsconfig.json",

@@ -1,6 +1,5 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../prisma/generated"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -15,4 +14,12 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@map("pushsubscription")
+}
+
+model SentMilestone {
+  id        Int      @id @default(autoincrement())
+  milestone String   @unique
+  sentAt    DateTime @default(now())
+
+  @@map("sentmilestone")
 }

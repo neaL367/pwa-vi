@@ -25,7 +25,7 @@ export const ArtDecoBold = localFont({
   src: "../public/art-deco-bold.woff",
   display: "swap",
   variable: "--font-art-deco-bold",
-  preload: false,
+  preload: true,
 });
 
 const siteConfig = {
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: siteConfig.title,
   description: siteConfig.description,
-  manifest: "../manifest.json",
+  manifest: "/manifest.json",
   formatDetection: {
     telephone: false,
   },
@@ -59,7 +59,12 @@ export const metadata: Metadata = {
     },
     {
       url: "/apple-icon.png",
-      sizes: "80x80",
+      sizes: "180x180",
+      type: "image/png",
+    },
+    {
+      url: "/icon-512x512.png",
+      sizes: "512x512",
       type: "image/png",
     },
   ],

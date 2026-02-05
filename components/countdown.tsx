@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, memo } from "react";
 import { cn } from "@/lib/cn";
 import logo from "../public/vi-logo.png";
 
@@ -30,7 +30,8 @@ function getServerSnapshot() {
   return 0;
 }
 
-function TimeUnit({ value, label }: { value: number; label: string }) {
+
+const TimeUnit = memo(function TimeUnit({ value, label }: { value: number; label: string }) {
   return (
     <>
       <span className="tabular-nums tracking-normal">
@@ -39,76 +40,90 @@ function TimeUnit({ value, label }: { value: number; label: string }) {
       {label}{" "}
     </>
   );
-}
+});
 
-function CountdownDisplay({ children }: { children: React.ReactNode }) {
-  const [load, setLoad] = useState(false);
-
-  return (
-    <div className="mb-10 flex flex-col items-center gap-[calc(clamp(6vh,11vw,6vh)*.4)]">
-      {/* Logo Section */}
-      <div className="w-[clamp(20vh,25%,30vh)] h-full flex items-center justify-center">
-        <Image
-          src={logo}
-          width={807}
-          height={540}
-          alt="vi logo"
-          loading="eager"
-          draggable="false"
-          onLoad={() => setLoad(true)}
-          className={cn(
-            `w-full h-auto transition-all ease-out duration-700`,
-            load ? "blur-0 opacity-100 scale-100" : "blur-lg opacity-0 scale-95"
-          )}
-        />
-      </div>
-
-      <ConsoleLogo />
-
-      {/* Header Text */}
-      <div className="text-center space-y-1 font-deco-bold">
-        <h3
-          className={cn(
-            `block text-[min(8vw,2.5vh)] md:text-[clamp(2.5vh,11vw,3vh)] uppercase`,
-            `bg-radial-[circle_at_50%_40vh] from-[#ffd27b] via-[#df3a93] to-[#5c1663] from-0% via-[60vh] to-[100vh]`,
-            `text-transparent bg-clip-text isolate wrap-break-word text-nowrap leading-[86%] tracking-[-.04em] md:tracking-[-.0125em]`
-          )}
-        >
-          COMING NOVEMBER 19 2026
-        </h3>
-      </div>
-
-      {/* Separator */}
-      <div className="inline-flex items-center justify-center w-full">
-        <hr className="w-66 md:w-90 h-1 0 border-0 rounded-sm bg-zinc-700" />
-        <div className="absolute px-4 -translate-x-1/2 left-1/2 bg-zinc-900">
-          <svg
-            className="w-4 h-4 text-zinc-300"
-            aria-hidden="true"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="currentColor"
-            viewBox="0 0 18 14"
-          >
-            <path d="M6 0H2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4v1a3 3 0 0 1-3 3H2a1 1 0 0 0 0 2h1a5.006 5.006 0 0 0 5-5V2a2 2 0 0 0-2-2Zm10 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4v1a3 3 0 0 1-3 3h-1a1 1 0 0 0 0 2h1a5.006 5.006 0 0 0 5-5V2a2 2 0 0 0-2-2Z" />
-          </svg>
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          "block text-[min(8vw,3.5vh)] md:text-[clamp(3.5vh,11vw,4vh)] font-deco-bold",
-          "bg-radial-[circle_at_50%_75%] from-[#ffd27b] to-[#df3a93] from-0%",
-          "text-transparent bg-clip-text isolate wrap-break-word text-nowrap",
-          "leading-[86%] tracking-[-.04em] md:tracking-[-.0125em]"
-        )}
-      >
+export function Countdown({ children }: { children?: React.ReactNode }) {
+  if (children) {
+    return (
+      <div className="mb-10 flex flex-col items-center gap-[calc(clamp(6vh,11vw,6vh)*.4)]">
         {children}
       </div>
+    );
+  }
+
+  // Default layout if no children provided
+  return (
+    <div className="mb-10 flex flex-col items-center gap-[calc(clamp(6vh,11vw,6vh)*.4)]">
+      <Countdown.Logo />
+      <Countdown.ConsoleLogos />
+      <Countdown.Header />
+      <Countdown.Separator />
+      <Countdown.Timer />
     </div>
   );
 }
 
-export function Countdown() {
+Countdown.Logo = function CountdownLogo() {
+  const [load, setLoad] = useState(false);
+  return (
+    <div className="w-[clamp(20vh,25%,30vh)] h-full flex items-center justify-center">
+      <Image
+        src={logo}
+        width={807}
+        height={540}
+        alt="vi logo"
+        loading="eager"
+        draggable="false"
+        onLoad={() => setLoad(true)}
+        className={cn(
+          `w-full h-auto transition-all ease-out duration-700`,
+          load ? "blur-0 opacity-100 scale-100" : "blur-lg opacity-0 scale-95"
+        )}
+      />
+    </div>
+  );
+};
+
+Countdown.ConsoleLogos = function CountdownConsoleLogos() {
+  return <ConsoleLogo />;
+};
+
+Countdown.Header = function CountdownHeader({ text = "COMING NOVEMBER 19 2026" }: { text?: string }) {
+  return (
+    <div className="text-center space-y-1 font-deco-bold">
+      <h3
+        className={cn(
+          `block text-[min(8vw,2.5vh)] md:text-[clamp(2.5vh,11vw,3vh)] uppercase`,
+          `bg-radial-[circle_at_50%_40vh] from-[#ffd27b] via-[#df3a93] to-[#5c1663] from-0% via-[60vh] to-[100vh]`,
+          `text-transparent bg-clip-text isolate wrap-break-word text-nowrap leading-[86%] tracking-[-.04em] md:tracking-[-.0125em]`
+        )}
+      >
+        {text}
+      </h3>
+    </div>
+  );
+};
+
+Countdown.Separator = function CountdownSeparator() {
+  return (
+    <div className="inline-flex items-center justify-center w-full">
+      <hr className="w-66 md:w-90 h-1 0 border-0 rounded-sm bg-zinc-700" />
+      <div className="absolute px-4 -translate-x-1/2 left-1/2 bg-zinc-900">
+        <svg
+          className="w-4 h-4 text-zinc-300"
+          aria-hidden="true"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="currentColor"
+          viewBox="0 0 18 14"
+        >
+          <path d="M6 0H2a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4v1a3 3 0 0 1-3 3H2a1 1 0 0 0 0 2h1a5.006 5.006 0 0 0 5-5V2a2 2 0 0 0-2-2Zm10 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4v1a3 3 0 0 1-3 3h-1a1 1 0 0 0 0 2h1a5.006 5.006 0 0 0 5-5V2a2 2 0 0 0-2-2Z" />
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+Countdown.Timer = function CountdownTimer() {
   const currentTime = useSyncExternalStore(
     subscribe,
     getSnapshot,
@@ -121,7 +136,14 @@ export function Countdown() {
   const isReleased = diff <= 0;
 
   return (
-    <CountdownDisplay>
+    <div
+      className={cn(
+        "block text-[min(8vw,3.5vh)] md:text-[clamp(3.5vh,11vw,4vh)] font-deco-bold",
+        "bg-radial-[circle_at_50%_75%] from-[#ffd27b] to-[#df3a93] from-0%",
+        "text-transparent bg-clip-text isolate wrap-break-word text-nowrap",
+        "leading-[86%] tracking-[-.04em] md:tracking-[-.0125em]"
+      )}
+    >
       {isLoading ? (
         <span className="flex gap-3.5">
           <SkeletonUnit label="d" />
@@ -150,18 +172,19 @@ export function Countdown() {
           <TimeUnit value={Math.floor((diff % (1000 * 60)) / 1000)} label="s" />
         </span>
       )}
-    </CountdownDisplay>
+    </div>
   );
-}
+};
 
-function SkeletonUnit({ label }: { label: string }) {
+
+const SkeletonUnit = memo(function SkeletonUnit({ label }: { label: string }) {
   return (
     <div className="time-unit-skeleton">
       <span className="value">--</span>
       <span className="label">{label}</span>
     </div>
   );
-}
+});
 
 function ConsoleLogo() {
   return (

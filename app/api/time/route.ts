@@ -53,11 +53,15 @@ export async function GET(request: Request) {
   const target = TARGET_DATE.getTime();
   const timeLeft = target - now;
 
-  const TOLERANCE = 60 * 1000; // 1 minute tolerance
+  const TOLERANCE = 10 * 60 * 1000; // 10 minute window to catch a milestone
 
   const activeMilestone = MILESTONES.find((m) => {
-    const diff = Math.abs(timeLeft - m.ms);
-    return diff < TOLERANCE;
+    // We want to trigger if the milestone is "now" or was in the last 10 minutes
+    // Time left decreases as we get closer. 
+    // If timeLeft is -5 mins (milestone + 5 mins), and m.ms is 0.
+    // diff = Math.abs(-300000 - 0) = 300000 (5 mins).
+    const diff = m.ms - timeLeft;
+    return diff >= 0 && diff < TOLERANCE;
   });
 
   if (activeMilestone) {
