@@ -1,15 +1,30 @@
 import { NextResponse } from "next/server";
-import { sendNotification } from "../../actions";
+import { sendNotification } from "@/lib/notifications";
+import { MILLISECONDS, RELEASE_DATE } from "@/lib/constants";
 
-const TARGET_DATE = new Date("2026-11-19T00:00:00Z");
+// GTA VI launches at LOCAL midnight Nov 19 in each timezone.
+// UTC-12: Nov 19 00:00 local = Nov 18 12:00 UTC  (earliest)
+// UTC+14: Nov 19 00:00 local = Nov 19 14:00 UTC  (latest)
+const EARLIEST_RELEASE_UTC =
+  new Date(`${RELEASE_DATE}T12:00:00Z`).getTime() - MILLISECONDS.DAY;
+const LATEST_RELEASE_UTC = new Date(
+  `${RELEASE_DATE}T14:00:00Z`
+).getTime();
 
-const MILLISECONDS = {
-  MINUTE: 60 * 1000,
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-  WEEK: 7 * 24 * 60 * 60 * 1000,
-  MONTH: 30.44 * 24 * 60 * 60 * 1000,
-};
+const TOLERANCE = 10 * MILLISECONDS.MINUTE;
+
+// Convert a release-relative UTC timestamp to a calendar-adjusted one.
+// Month milestones use calendar date math (e.g. "5 months before Nov 19" = Jun 19),
+// so the API fires at the same time the client shows.
+function getMilestoneUTC(releaseUtc: number, ms: number): number {
+  if (ms >= 28 * MILLISECONDS.DAY) {
+    const months = Math.round(ms / MILLISECONDS.MONTH);
+    const d = new Date(releaseUtc);
+    d.setUTCMonth(d.getUTCMonth() - months);
+    return d.getTime();
+  }
+  return releaseUtc - ms;
+}
 
 function createRange(
   start: number,
@@ -17,7 +32,6 @@ function createRange(
   unitMs: number,
   unitLabel: string
 ) {
-  // Create an array of length (start - end + 1)
   return Array.from({ length: start - end + 1 }, (_, i) => {
     const value = start - i;
     return {
@@ -43,39 +57,47 @@ const MILESTONES = [
   { label: "GTA VI RELEASED NOW!", ms: 0 },
 ];
 
+// Check if ANY timezone is currently at this milestone.
+function isMilestoneActive(milestoneMs: number, now: number): boolean {
+  const earliestFire = getMilestoneUTC(EARLIEST_RELEASE_UTC, milestoneMs);
+  const latestFire = getMilestoneUTC(LATEST_RELEASE_UTC, milestoneMs);
+  return now >= earliestFire && now <= latestFire + TOLERANCE;
+}
+
+// Find the next milestone that hasn't fired yet.
+function getNextMilestone(now: number) {
+  for (const m of MILESTONES) {
+    const earliestFire = getMilestoneUTC(EARLIEST_RELEASE_UTC, m.ms);
+    const latestFire = getMilestoneUTC(LATEST_RELEASE_UTC, m.ms);
+    const firesAt = earliestFire + (latestFire - earliestFire) / 2;
+    if (firesAt > now) {
+      return { label: m.label, firesAt };
+    }
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date().getTime();
-  const target = TARGET_DATE.getTime();
-  const timeLeft = target - now;
+  const now = Date.now();
+  const active = MILESTONES.find((m) => isMilestoneActive(m.ms, now));
 
-  const TOLERANCE = 10 * 60 * 1000; // 10 minute window to catch a milestone
-
-  const activeMilestone = MILESTONES.find((m) => {
-    // We want to trigger if the milestone is "now" or was in the last 10 minutes
-    // Time left decreases as we get closer. 
-    // If timeLeft is -5 mins (milestone + 5 mins), and m.ms is 0.
-    // diff = Math.abs(-300000 - 0) = 300000 (5 mins).
-    const diff = m.ms - timeLeft;
-    return diff >= 0 && diff < TOLERANCE;
-  });
-
-  if (activeMilestone) {
-    console.log(`Triggering notification: ${activeMilestone.label}`);
-
-    // passing 'null' as the subscription triggers the broadcast to all users
-    const result = await sendNotification(activeMilestone.label, null);
-
+  if (active) {
+    const result = await sendNotification(active.label, null);
     return NextResponse.json({
       triggered: true,
-      milestone: activeMilestone.label,
+      milestone: active.label,
       result,
     });
   }
 
-  return NextResponse.json({ triggered: false, timeLeft });
+  return NextResponse.json({
+    triggered: false,
+    timeLeft: LATEST_RELEASE_UTC - now,
+    nextMilestone: getNextMilestone(now),
+  });
 }

@@ -3,30 +3,44 @@
 import Image from "next/image";
 import { useState, useSyncExternalStore, memo } from "react";
 import { cn } from "@/lib/cn";
+import { RELEASE_DATE } from "@/lib/constants";
 import logo from "../public/vi-logo.png";
 
-const TARGET_DATE = new Date("2026-11-19T00:00:00");
+const TARGET = new Date(`${RELEASE_DATE}T00:00:00`).getTime();
 
 let now = typeof window !== "undefined" ? Date.now() : 0;
 const listeners = new Set<() => void>();
+let intervalId: ReturnType<typeof setInterval> | null = null;
 
-if (typeof window !== "undefined") {
-  setInterval(() => {
+function startInterval() {
+  if (intervalId) return;
+  intervalId = setInterval(() => {
     now = Date.now();
     listeners.forEach((l) => l());
   }, 1000);
 }
 
-function subscribe(callback: () => void) {
-  listeners.add(callback);
-  return () => listeners.delete(callback);
+function stopInterval() {
+  if (listeners.size === 0 && intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
 }
 
-function getSnapshot() {
+export function subscribe(callback: () => void) {
+  listeners.add(callback);
+  startInterval();
+  return () => {
+    listeners.delete(callback);
+    stopInterval();
+  };
+}
+
+export function getSnapshot() {
   return now;
 }
 
-function getServerSnapshot() {
+export function getServerSnapshot() {
   return 0;
 }
 
@@ -108,10 +122,9 @@ Countdown.Separator = function CountdownSeparator() {
   return (
     <div className="inline-flex items-center justify-center w-full">
       <hr className="w-66 md:w-90 h-1 0 border-0 rounded-sm bg-zinc-700" />
-      <div className="absolute px-4 -translate-x-1/2 left-1/2 bg-zinc-900">
+      <div aria-hidden="true" className="absolute px-4 -translate-x-1/2 left-1/2 bg-zinc-900">
         <svg
           className="w-4 h-4 text-zinc-300"
-          aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           fill="currentColor"
           viewBox="0 0 18 14"
@@ -131,8 +144,7 @@ Countdown.Timer = function CountdownTimer() {
   );
 
   const isLoading = currentTime === 0;
-  const target = TARGET_DATE.getTime();
-  const diff = target - currentTime;
+  const diff = TARGET - currentTime;
   const isReleased = diff <= 0;
 
   return (
@@ -189,6 +201,7 @@ const SkeletonUnit = memo(function SkeletonUnit({ label }: { label: string }) {
 function ConsoleLogo() {
   return (
     <div
+      aria-hidden="true"
       className={cn(
         `w-[calc(clamp(8vh,8vw,10vh)*3)] h-[calc(clamp(8vh,8vw,10vh)*0.22)]`,
         `flex justify-between gap-[calc(clamp(6vh,11vw,6vh)*.4)]`

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --background: #000000;
   --foreground: #ffffff;
   font-synthesis: none;
@@ -18,7 +19,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  margin: 0 auto;
+  margin: 0;
   scrollbar-gutter: stable both-edges;
   scroll-behavior: smooth;
 }

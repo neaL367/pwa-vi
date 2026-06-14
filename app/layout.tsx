@@ -1,5 +1,6 @@
 import "./globals.css";
 
+import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import localFont from "next/font/local";
 
@@ -58,8 +59,8 @@ export const metadata: Metadata = {
       type: "image/x-icon",
     },
     {
-      url: "/apple-icon.png",
-      sizes: "180x180",
+      url: "/apple-touch-icon.png",
+      sizes: "80x80",
       type: "image/png",
     },
     {
@@ -110,7 +111,9 @@ export default function RootLayout(props: LayoutProps<"/">) {
         )}
       >
         <Analytics />
-        <main>{props.children}</main>
+        <Suspense fallback={<div className="min-h-screen bg-black" />}>
+          <main>{props.children}</main>
+        </Suspense>
       </body>
     </html>
   );

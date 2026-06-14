@@ -5,13 +5,9 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
-        userAgent: "Googlebot",
+        userAgent: ["Googlebot", "Applebot", "Bingbot"],
         allow: ["/"],
         disallow: "/private/",
-      },
-      {
-        userAgent: ["Applebot", "Bingbot"],
-        disallow: ["/"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

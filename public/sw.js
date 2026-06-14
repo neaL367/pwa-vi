@@ -1,9 +1,8 @@
-const CACHE_NAME = "gta-vi-cache-v1";
-const ASSETS_TO_CACHE = [
-  "/",
+const CACHE_NAME = "gta-vi-cache-v2";
+const STATIC_ASSETS = [
   "/manifest.json",
   "/favicon.ico",
-  "/apple-icon.png",
+  "/apple-touch-icon.png",
   "/icon-512x512.png",
   "/vi-logo.png",
   "/art-deco-regular.woff",
@@ -11,37 +10,27 @@ const ASSETS_TO_CACHE = [
   "/art-deco-bold.woff",
 ];
 
-// Install Event - Precache static assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("Caching static assets");
-      return cache.addAll(ASSETS_TO_CACHE);
-    }),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)),
   );
   self.skipWaiting();
 });
 
-// Activate Event - Clean up old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log("Deleting old cache:", cache);
-            return caches.delete(cache);
-          }
-        }),
-      );
-    }),
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name)),
+      ),
+    ),
   );
   self.clients.claim();
 });
 
-// Fetch Event - Serve from cache, then network (Stale-While-Revalidate)
 self.addEventListener("fetch", (event) => {
-  // Skip cross-origin requests and non-GET requests
   if (
     event.request.method !== "GET" ||
     !event.request.url.startsWith(self.location.origin)
@@ -49,29 +38,41 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(() => {
-            // If network fails and no cache, we might want to return an offline page
-            // but for now, the cached version is enough
-          });
+  const url = new URL(event.request.url);
+  const isNavigation = event.request.mode === "navigate";
 
-        // Return cached response if available, otherwise wait for network
-        return cachedResponse || fetchPromise;
-      });
+  if (isNavigation || url.pathname === "/") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      const fetchPromise = fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => cached);
+
+      return cached || fetchPromise;
     }),
   );
 });
 
-// Push Notifications
 self.addEventListener("push", function (event) {
   if (event.data) {
     const data = event.data.json();
@@ -89,7 +90,6 @@ self.addEventListener("push", function (event) {
 });
 
 self.addEventListener("notificationclick", function (event) {
-  console.log("Notification click received.");
   event.notification.close();
   event.waitUntil(clients.openWindow("/"));
 });
