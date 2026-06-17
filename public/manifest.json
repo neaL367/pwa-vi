@@ -3,6 +3,8 @@
     "short_name": "GTA VI",
     "description": "Countdown timer for Grand Theft Auto VI release",
     "start_url": "/",
+    "id": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#000000",
     "theme_color": "#000000",

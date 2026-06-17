@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState, useSyncExternalStore, memo } from "react";
 import { cn } from "@/lib/cn";
-import { RELEASE_DATE } from "@/lib/constants";
+import { MILLISECONDS, RELEASE_DATE } from "@/lib/constants";
 import logo from "../public/vi-logo.png";
 
 const TARGET = new Date(`${RELEASE_DATE}T00:00:00`).getTime();
@@ -168,20 +168,20 @@ Countdown.Timer = function CountdownTimer() {
       ) : (
         <span>
           <TimeUnit
-            value={Math.floor(diff / (1000 * 60 * 60 * 24))}
+            value={Math.floor(diff / MILLISECONDS.DAY)}
             label="d"
           />
           <TimeUnit
             value={Math.floor(
-              (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+              (diff % MILLISECONDS.DAY) / MILLISECONDS.HOUR
             )}
             label="h"
           />
           <TimeUnit
-            value={Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))}
+            value={Math.floor((diff % MILLISECONDS.HOUR) / MILLISECONDS.MINUTE)}
             label="m"
           />
-          <TimeUnit value={Math.floor((diff % (1000 * 60)) / 1000)} label="s" />
+          <TimeUnit value={Math.floor((diff % MILLISECONDS.MINUTE) / 1000)} label="s" />
         </span>
       )}
     </div>

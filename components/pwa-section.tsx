@@ -16,6 +16,9 @@ interface NavigatorIOS extends Navigator {
 const VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
 const SW_PATH = "/sw.js";
 
+const BTN_CLASS =
+  "px-4 py-2 rounded-full font-medium transition-all duration-200 bg-white text-black hover:bg-white/90 hover:scale-105 active:scale-95 hover:cursor-pointer";
+
 const NOOP_SUBSCRIBE = () => () => {};
 
 const IOS_REGEX = /iPad|iPhone|iPod/i;
@@ -107,9 +110,7 @@ function usePushNotifications() {
     if (!subscription) return;
     setLoading(true);
     try {
-      const { endpoint } = subscription;
-      const { p256dh, auth } = subscription.toJSON().keys!;
-      await unsubscribeUser({ endpoint, keys: { p256dh, auth } });
+      await unsubscribeUser({ endpoint: subscription.endpoint, keys: { p256dh: "", auth: "" } });
       await subscription.unsubscribe();
       setSubscription(null);
     } catch (error) {
@@ -238,10 +239,8 @@ function PushButton({
       onClick={onToggle}
       disabled={loading}
       className={cn(
-        "px-4 py-2 rounded-full font-medium transition-all duration-200 bg-white text-black",
-        loading
-          ? "opacity-50 cursor-not-allowed"
-          : "hover:bg-white/90 hover:scale-105 active:scale-95 hover:cursor-pointer"
+        BTN_CLASS,
+        loading && "opacity-50 cursor-not-allowed",
       )}
     >
       {label}
@@ -290,7 +289,7 @@ function InstallPrompt() {
     <PWASection title="Install App">
       <button
         onClick={triggerInstall}
-        className="px-4 py-2 bg-white text-black hover:bg-white/90 rounded-full transition-all duration-200 font-medium hover:scale-105 active:scale-95 hover:cursor-pointer"
+        className={BTN_CLASS}
       >
         Add to Home Screen
       </button>

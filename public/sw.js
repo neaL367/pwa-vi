@@ -39,6 +39,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(event.request.url);
+
+  // Never cache API routes — stale responses would break cron logic.
+  if (url.pathname.startsWith("/api/")) {
+    return;
+  }
   const isNavigation = event.request.mode === "navigate";
 
   if (isNavigation || url.pathname === "/") {
@@ -79,6 +84,7 @@ self.addEventListener("push", function (event) {
     const options = {
       body: data.body,
       icon: data.icon || "/apple-touch-icon.png",
+      badge: "/apple-touch-icon.png",
       vibrate: [100, 50, 100],
       data: {
         dateOfArrival: Date.now(),
