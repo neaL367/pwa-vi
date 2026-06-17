@@ -2,8 +2,8 @@
 
 import {
   isValidSubscription,
-  saveSubscriptionToDb,
-  deleteSubscriptionFromDb,
+  saveSubscription,
+  deleteSubscription,
   type PushSubscriptionJSON,
   type ServiceResponse,
 } from "@/lib/notifications";
@@ -15,7 +15,7 @@ export async function subscribeUser(sub: PushSubscriptionJSON): Promise<ServiceR
     return { success: false, error: "Invalid subscription" };
   }
   try {
-    await saveSubscriptionToDb(sub);
+    await saveSubscription(sub);
     return { success: true };
   } catch (error) {
     console.error("Subscribe failed:", error);
@@ -24,9 +24,12 @@ export async function subscribeUser(sub: PushSubscriptionJSON): Promise<ServiceR
 }
 
 export async function unsubscribeUser(sub: PushSubscriptionJSON): Promise<ServiceResponse> {
+  // Intentional asymmetry: only the endpoint is needed to identify and delete the record.
+  // Skipping the full isValidSubscription() guard ensures that even if a client's
+  // browser subscription keys become malformed, they can still successfully unsubscribe.
   if (!sub?.endpoint) return { success: false, error: "No endpoint" };
   try {
-    await deleteSubscriptionFromDb(sub.endpoint);
+    await deleteSubscription(sub.endpoint);
     return { success: true };
   } catch (error) {
     console.error("Unsubscribe failed:", error);

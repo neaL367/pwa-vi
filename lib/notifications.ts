@@ -1,5 +1,7 @@
 import webpush from "web-push";
 import { after } from "next/server";
+import { Prisma } from "@prisma/client";
+import * as v from "valibot";
 import { prisma } from "@/lib/prisma";
 
 const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -26,16 +28,19 @@ export type ServiceResponse = {
   error?: string;
 };
 
+const subscriptionSchema = v.object({
+  endpoint: v.pipe(v.string(), v.minLength(1)),
+  keys: v.object({
+    p256dh: v.string(),
+    auth: v.string(),
+  }),
+});
+
 export function isValidSubscription(sub: unknown): sub is PushSubscriptionJSON {
-  if (typeof sub !== "object" || sub === null) return false;
-  const obj = sub as Record<string, unknown>;
-  if (typeof obj.endpoint !== "string" || !obj.endpoint) return false;
-  if (typeof obj.keys !== "object" || obj.keys === null) return false;
-  const keys = obj.keys as Record<string, unknown>;
-  return typeof keys.p256dh === "string" && typeof keys.auth === "string";
+  return v.safeParse(subscriptionSchema, sub).success;
 }
 
-export async function saveSubscriptionToDb(sub: PushSubscriptionJSON) {
+export async function saveSubscription(sub: PushSubscriptionJSON) {
   await prisma.pushSubscription.upsert({
     where: { endpoint: sub.endpoint },
     update: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
@@ -43,8 +48,11 @@ export async function saveSubscriptionToDb(sub: PushSubscriptionJSON) {
   });
 }
 
-export async function deleteSubscriptionFromDb(endpoint: string) {
-  await prisma.pushSubscription.delete({ where: { endpoint } });
+export async function deleteSubscription(endpoint: string) {
+  // deleteMany instead of delete: no-ops silently if the record is already gone.
+  // Prevents a P2025 crash when two concurrent broadcast threads both try to
+  // clean up the same expired subscription.
+  await prisma.pushSubscription.deleteMany({ where: { endpoint } });
 }
 
 async function getAllSubscriptions(): Promise<PushSubscriptionJSON[]> {
@@ -86,7 +94,7 @@ async function handleWebPushError(error: unknown, endpoint: string) {
 
   const { statusCode } = error as WebPushError;
   if (statusCode === 410 || statusCode === 404) {
-    await deleteSubscriptionFromDb(endpoint);
+    await deleteSubscription(endpoint);
     return { success: false, error: "Expired" };
   }
 
@@ -111,8 +119,14 @@ export async function sendNotification(
 
   try {
     await prisma.sentMilestone.create({ data: { milestone: message } });
-  } catch {
-    return { success: false, error: "Milestone already sent recently" };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // Unique-constraint violation — milestone already sent, skip gracefully.
+      return { success: false, error: "Milestone already sent recently" };
+    }
+    // Anything else is a real DB problem (connection failure, schema mismatch, etc.).
+    console.error("Database error while locking milestone:", error);
+    return { success: false, error: "Internal database error" };
   }
 
   after(async () => {

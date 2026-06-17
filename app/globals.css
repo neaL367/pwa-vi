@@ -23,3 +23,38 @@ body {
   scrollbar-gutter: stable both-edges;
   scroll-behavior: smooth;
 }
+
+/* Custom premium springy entry/exit animations for Sonner Toasts */
+@keyframes toast-enter {
+  0% {
+    transform: translate3d(0, -100px, 0) scale(0.92);
+    opacity: 0;
+  }
+  60% {
+    transform: translate3d(0, 8px, 0) scale(1.01);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-exit {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, -80px, 0) scale(0.92);
+    opacity: 0;
+  }
+}
+
+[data-sonner-toast][data-mounted="true"] {
+  animation: toast-enter 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+}
+
+[data-sonner-toast][data-removed="true"] {
+  animation: toast-exit 0.3s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards !important;
+}
+

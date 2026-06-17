@@ -3,13 +3,18 @@ import { sendNotification } from "@/lib/notifications";
 import { MILLISECONDS, RELEASE_DATE } from "@/lib/constants";
 
 // GTA VI launches at LOCAL midnight Nov 19 in each timezone.
-// UTC+14 (Earliest, e.g. Kiribati): Nov 19 00:00 local = Nov 18 10:00 UTC
-// UTC-12 (Latest, e.g. Baker Island): Nov 19 00:00 local = Nov 19 12:00 UTC
+// The global release window spans:
+//   UTC+14 (earliest, e.g. Kiribati) : Nov 19 00:00 local = Nov 18 10:00 UTC
+//   UTC-12 (latest,  e.g. Baker Is.) : Nov 19 00:00 local = Nov 19 12:00 UTC
+//
+// Nov 18 10:00 UTC = Nov 19 00:00 UTC+14  →  subtract 14 h from Nov 19 00:00 UTC
+//                  = `${RELEASE_DATE}T00:00:00Z` - 14 h
+//                  = `${RELEASE_DATE}T10:00:00Z` - 24 h  (equivalent, matches the literal below)
 const EARLIEST_RELEASE_UTC =
   new Date(`${RELEASE_DATE}T10:00:00Z`).getTime() - MILLISECONDS.DAY;
-const LATEST_RELEASE_UTC = new Date(
-  `${RELEASE_DATE}T12:00:00Z`
-).getTime();
+
+// Nov 19 12:00 UTC = Nov 19 00:00 UTC-12
+const LATEST_RELEASE_UTC = new Date(`${RELEASE_DATE}T12:00:00Z`).getTime();
 
 const TOLERANCE = 90_000; // 90s — guarantees catch with 1-min cron + drift margin
 
@@ -18,7 +23,7 @@ const TOLERANCE = 90_000; // 90s — guarantees catch with 1-min cron + drift ma
 // so the API fires at the same time the client shows.
 function getMilestoneUTC(releaseUtc: number, ms: number): number {
   if (ms > 28 * MILLISECONDS.DAY) {
-    const months = Math.round(ms / MILLISECONDS.MONTH);
+    const months = Math.round(ms / MILLISECONDS.MONTH_APPROX);
     const d = new Date(releaseUtc);
     d.setUTCMonth(d.getUTCMonth() - months);
     return d.getTime();
@@ -26,6 +31,10 @@ function getMilestoneUTC(releaseUtc: number, ms: number): number {
   return releaseUtc - ms;
 }
 
+// Builds a list of { label, ms } milestone descriptors.
+// `ms` is the time-before-release value; for month milestones this uses
+// MONTH_APPROX as a rough input — getMilestoneUTC() corrects it to exact
+// calendar math (e.g. "5 months before Nov 19" → Jun 19 00:00 UTC).
 function createRange(
   start: number,
   end: number,
@@ -41,9 +50,13 @@ function createRange(
   });
 }
 
-// Pre-compute fire times at module init — avoids Date math on every cron hit.
+// Pre-computed at module init to avoid Date math on every cron hit.
+// All milestones fire relative to EARLIEST_RELEASE_UTC (UTC+14 midnight) so
+// the first person on Earth who can play gets each notification on time.
+// firesAt is the authoritative fire time — getMilestoneUTC() applies exact
+// calendar math for month milestones and simple subtraction for shorter ones.
 const MILESTONES = [
-  ...createRange(10, 2, MILLISECONDS.MONTH, "Month"),
+  ...createRange(10, 2, MILLISECONDS.MONTH_APPROX, "Month"), // firesAt corrected by getMilestoneUTC
   ...createRange(4, 2, MILLISECONDS.WEEK, "Week"),
   ...createRange(7, 2, MILLISECONDS.DAY, "Day"),
   { label: "24 Hours left!", ms: 24 * MILLISECONDS.HOUR },
@@ -58,7 +71,7 @@ const MILESTONES = [
   { label: "GTA VI RELEASED NOW!", ms: 0 },
 ].map((m) => ({
   ...m,
-  firesAt: getMilestoneUTC(EARLIEST_RELEASE_UTC, m.ms),
+  firesAt: getMilestoneUTC(EARLIEST_RELEASE_UTC, m.ms), // source of truth for scheduling
 }));
 
 export async function GET(request: Request) {

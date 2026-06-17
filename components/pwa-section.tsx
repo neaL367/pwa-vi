@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useSyncExternalStore, createContext, use } from "react";
 import { subscribeUser, unsubscribeUser } from "@/app/actions";
 import { cn } from "@/lib/cn";
+import { toast } from "sonner";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -98,9 +99,15 @@ function usePushNotifications() {
       setSubscription(sub);
       const { endpoint } = sub;
       const { p256dh, auth } = sub.toJSON().keys!;
-      await subscribeUser({ endpoint, keys: { p256dh, auth } });
+      const result = await subscribeUser({ endpoint, keys: { p256dh, auth } });
+      if (result.success) {
+        toast.success("Subscribed to GTA VI release alerts!");
+      } else {
+        toast.error(result.error || "Failed to save subscription.");
+      }
     } catch (error) {
       console.error("Subscription failed:", error);
+      toast.error("Notification permission denied or subscription failed.");
     } finally {
       setLoading(false);
     }
@@ -110,11 +117,17 @@ function usePushNotifications() {
     if (!subscription) return;
     setLoading(true);
     try {
-      await unsubscribeUser({ endpoint: subscription.endpoint, keys: { p256dh: "", auth: "" } });
-      await subscription.unsubscribe();
-      setSubscription(null);
+      const result = await unsubscribeUser({ endpoint: subscription.endpoint, keys: { p256dh: "", auth: "" } });
+      if (result.success) {
+        await subscription.unsubscribe();
+        setSubscription(null);
+        toast.success("Unsubscribed from alerts.");
+      } else {
+        toast.error(result.error || "Failed to unsubscribe.");
+      }
     } catch (error) {
       console.error("Unsubscription failed:", error);
+      toast.error("Failed to unsubscribe. Please try again.");
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@ import "./globals.css";
 import { Suspense } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import localFont from "next/font/local";
+import { Toaster } from "@/components/toaster";
 
 import { cn } from "@/lib/cn";
 import { baseUrl } from "./sitemap";
@@ -111,6 +112,7 @@ export default function RootLayout(props: LayoutProps<"/">) {
         )}
       >
         <Analytics />
+        <Toaster />
         <Suspense fallback={<div className="min-h-screen bg-black" />}>
           <main>{props.children}</main>
         </Suspense>
