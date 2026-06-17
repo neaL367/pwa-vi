@@ -247,17 +247,116 @@ function PushButton({
       ? "Unsubscribe"
       : "Subscribe";
 
+  const [currentLabel, setCurrentLabel] = useState(label);
+  const [prevLabel, setPrevLabel] = useState<string | null>(null);
+  const [direction, setDirection] = useState<"up" | "down">("down");
+
+  useEffect(() => {
+    if (label !== currentLabel) {
+      // Determine sliding direction:
+      // When subscribing (entering loading or subscribed), slide down
+      // When unsubscribing (entering loading or unsubscribed), slide up
+      const isSubscribing = label === "Subscribing..." || label === "Unsubscribe";
+      setDirection(isSubscribing ? "down" : "up");
+      setPrevLabel(currentLabel);
+      setCurrentLabel(label);
+    }
+  }, [label, currentLabel]);
+
+  const handleAnimationEnd = () => {
+    setPrevLabel(null);
+  };
+
   return (
     <button
       onClick={onToggle}
       disabled={loading}
       className={cn(
         BTN_CLASS,
-        loading && "opacity-50 cursor-not-allowed",
+        "w-40 h-10 relative overflow-hidden flex items-center justify-center",
+        loading && "opacity-75 cursor-not-allowed",
       )}
     >
-      {label}
+      <span className="relative w-full h-full flex items-center justify-center font-medium">
+        {prevLabel && (
+          <span
+            onAnimationEnd={handleAnimationEnd}
+            className={cn(
+              "absolute inset-0 flex items-center justify-center pointer-events-none select-none",
+              direction === "down"
+                ? "animate-[slide-out-down_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+                : "animate-[slide-out-up_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+            )}
+          >
+            {prevLabel}
+          </span>
+        )}
+        <span
+          className={cn(
+            "flex items-center justify-center",
+            prevLabel
+              ? direction === "down"
+                ? "animate-[slide-in-down_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+                : "animate-[slide-in-up_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+              : ""
+          )}
+        >
+          {currentLabel}
+        </span>
+      </span>
     </button>
+  );
+}
+
+function PushNotificationStatus({ subscribed }: { subscribed: boolean }) {
+  const label = subscribed
+    ? "You are subscribed to push notifications."
+    : "You are not subscribed to push notifications.";
+
+  const [currentLabel, setCurrentLabel] = useState(label);
+  const [prevLabel, setPrevLabel] = useState<string | null>(null);
+  const [direction, setDirection] = useState<"up" | "down">("down");
+
+  useEffect(() => {
+    if (label !== currentLabel) {
+      setDirection(subscribed ? "down" : "up");
+      setPrevLabel(currentLabel);
+      setCurrentLabel(label);
+    }
+  }, [label, currentLabel, subscribed]);
+
+  const handleAnimationEnd = () => {
+    setPrevLabel(null);
+  };
+
+  return (
+    <div className="relative w-full h-6 overflow-hidden flex items-center justify-center">
+      {prevLabel && (
+        <p
+          onAnimationEnd={handleAnimationEnd}
+          className={cn(
+            "absolute text-white/70 text-sm text-center select-none pointer-events-none whitespace-nowrap",
+            direction === "down"
+              ? "animate-[slide-out-down_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+              : "animate-[slide-out-up_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+          )}
+        >
+          {prevLabel}
+        </p>
+      )}
+      <p
+        className={cn(
+          "text-white/70 text-sm text-center whitespace-nowrap",
+          prevLabel
+            ? direction === "down"
+              ? "animate-[slide-in-down_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+              : "animate-[slide-in-up_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+            : ""
+        )}
+      >
+        {currentLabel}
+      </p>
+    </div>
   );
 }
 
@@ -277,11 +376,7 @@ function PushNotificationManager() {
 
   return (
     <PWASection title="Push Notifications">
-      <p className="text-white/70 text-sm">
-        {subscription
-          ? "You are subscribed to push notifications."
-          : "You are not subscribed to push notifications."}
-      </p>
+      <PushNotificationStatus subscribed={!!subscription} />
       <PushButton
         loading={loading}
         subscribed={!!subscription}
