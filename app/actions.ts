@@ -8,7 +8,6 @@ import {
   type ServiceResponse,
 } from "@/lib/notifications";
 
-export type { PushSubscriptionJSON, ServiceResponse };
 
 export async function subscribeUser(sub: PushSubscriptionJSON): Promise<ServiceResponse> {
   if (!isValidSubscription(sub)) {
