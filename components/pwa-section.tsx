@@ -43,6 +43,24 @@ function checkPushSupport() {
   return "serviceWorker" in navigator && "PushManager" in window;
 }
 
+function getClientTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function getSubscriptionPayload(sub: PushSubscription) {
+  const json = sub.toJSON();
+  if (!json.keys?.p256dh || !json.keys.auth) return null;
+
+  return {
+    endpoint: sub.endpoint,
+    keys: {
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+    },
+    timeZone: getClientTimeZone(),
+  };
+}
+
 async function registerServiceWorker() {
   const registration = await navigator.serviceWorker.register(SW_PATH, {
     scope: "/",
@@ -82,6 +100,13 @@ function usePushNotifications() {
       await registerServiceWorker();
       const sub = await getExistingSubscription();
       setSubscription(sub);
+
+      // Refresh the stored timezone for existing browser subscriptions too.
+      // This upgrades subscriptions created before timezone support was added.
+      if (sub) {
+        const payload = getSubscriptionPayload(sub);
+        if (payload) await subscribeUser(payload);
+      }
     } catch (error) {
       console.error("Sync failed:", error);
     }
@@ -97,9 +122,9 @@ function usePushNotifications() {
     try {
       const sub = await createNewSubscription();
       setSubscription(sub);
-      const { endpoint } = sub;
-      const { p256dh, auth } = sub.toJSON().keys!;
-      const result = await subscribeUser({ endpoint, keys: { p256dh, auth } });
+      const payload = getSubscriptionPayload(sub);
+      if (!payload) throw new Error("Push subscription keys are missing");
+      const result = await subscribeUser(payload);
       if (result.success) {
         toast.success("Subscribed to GTA VI release alerts!");
       } else {
@@ -257,6 +282,8 @@ function PushButton({
       // When subscribing (entering loading or subscribed), slide down
       // When unsubscribing (entering loading or unsubscribed), slide up
       const isSubscribing = label === "Subscribing..." || label === "Unsubscribe";
+      // Intentional: synchronize the animation state when the label changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDirection(isSubscribing ? "down" : "up");
       setPrevLabel(currentLabel);
       setCurrentLabel(label);
@@ -319,6 +346,8 @@ function PushNotificationStatus({ subscribed }: { subscribed: boolean }) {
 
   useEffect(() => {
     if (label !== currentLabel) {
+      // Intentional: synchronize the animation state when the label changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDirection(subscribed ? "down" : "up");
       setPrevLabel(currentLabel);
       setCurrentLabel(label);

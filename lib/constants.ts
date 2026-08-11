@@ -1,5 +1,12 @@
 export const RELEASE_DATE = "2026-11-19";
 
+// GTA VI is expected to become available at local midnight on the announced
+// date. UTC+14 is the first timezone to reach that date, so this is the
+// canonical instant used by both the countdown and milestone scheduler.
+export const RELEASE_AT_UTC = new Date(
+  `${RELEASE_DATE}T00:00:00+14:00`,
+).getTime();
+
 export const BG_GRADIENT =
   "bg-linear-[223.17deg,#1c1829,#1b1828_8.61%,#191724_17.21%,#161520_25.82%,#14131c_34.42%,#121218_43.03%,#111117_51.63%]";
 

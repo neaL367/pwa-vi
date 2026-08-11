@@ -11,9 +11,32 @@ model PushSubscription {
   endpoint  String   @unique
   p256dh    String
   auth      String
+  timeZone  String   @default("UTC")
   createdAt DateTime @default(now())
 
+  deliveries MilestoneDelivery[]
+
   @@map("pushsubscription")
+}
+
+// Per-subscription delivery state makes retries idempotent. The old
+// SentMilestone table is retained for backwards-compatible database upgrades.
+model MilestoneDelivery {
+  id            Int              @id @default(autoincrement())
+  milestone     String
+  endpoint      String
+  status        String           @default("processing")
+  attempts      Int              @default(0)
+  lockedAt      DateTime?
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  lastError     String?
+  createdAt     DateTime         @default(now())
+  subscription  PushSubscription @relation(fields: [endpoint], references: [endpoint], onDelete: Cascade)
+
+  @@unique([milestone, endpoint])
+  @@index([status, nextAttemptAt])
+  @@map("milestonedelivery")
 }
 
 model SentMilestone {

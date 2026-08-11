@@ -1,8 +1,13 @@
 import webpush from "web-push";
-import { after } from "next/server";
 import { Prisma } from "@prisma/client";
 import * as v from "valibot";
 import { prisma } from "@/lib/prisma";
+import {
+  getDueMilestones,
+  getMilestonesForTimeZone,
+  normalizeTimeZone,
+  type ScheduledMilestone,
+} from "@/lib/milestones";
 
 const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -14,6 +19,11 @@ webpush.setVapidDetails("https://pwa-vi.vercel.app", publicKey, privateKey);
 export type PushSubscriptionJSON = {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+  timeZone?: string;
+};
+
+type StoredSubscription = PushSubscriptionJSON & {
+  timeZone: string;
 };
 
 type WebPushError = {
@@ -31,9 +41,10 @@ export type ServiceResponse = {
 const subscriptionSchema = v.object({
   endpoint: v.pipe(v.string(), v.minLength(1)),
   keys: v.object({
-    p256dh: v.string(),
-    auth: v.string(),
+    p256dh: v.pipe(v.string(), v.minLength(1)),
+    auth: v.pipe(v.string(), v.minLength(1)),
   }),
+  timeZone: v.optional(v.string()),
 });
 
 export function isValidSubscription(sub: unknown): sub is PushSubscriptionJSON {
@@ -41,27 +52,37 @@ export function isValidSubscription(sub: unknown): sub is PushSubscriptionJSON {
 }
 
 export async function saveSubscription(sub: PushSubscriptionJSON) {
+  const timeZone = normalizeTimeZone(sub.timeZone);
+
   await prisma.pushSubscription.upsert({
     where: { endpoint: sub.endpoint },
-    update: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
-    create: { endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+    update: {
+      p256dh: sub.keys.p256dh,
+      auth: sub.keys.auth,
+      timeZone,
+    },
+    create: {
+      endpoint: sub.endpoint,
+      p256dh: sub.keys.p256dh,
+      auth: sub.keys.auth,
+      timeZone,
+    },
   });
 }
 
 export async function deleteSubscription(endpoint: string) {
-  // deleteMany instead of delete: no-ops silently if the record is already gone.
-  // Prevents a P2025 crash when two concurrent broadcast threads both try to
-  // clean up the same expired subscription.
   await prisma.pushSubscription.deleteMany({ where: { endpoint } });
 }
 
-async function getAllSubscriptions(): Promise<PushSubscriptionJSON[]> {
+async function getAllSubscriptions(): Promise<StoredSubscription[]> {
   const rows = await prisma.pushSubscription.findMany({
-    select: { endpoint: true, p256dh: true, auth: true },
+    select: { endpoint: true, p256dh: true, auth: true, timeZone: true },
   });
+
   return rows.map((row) => ({
     endpoint: row.endpoint,
     keys: { p256dh: row.p256dh, auth: row.auth },
+    timeZone: normalizeTimeZone(row.timeZone),
   }));
 }
 
@@ -71,15 +92,6 @@ function createPayload(message: string) {
     body: message,
     icon: "/icon.png",
   });
-}
-
-async function triggerWebPush(sub: PushSubscriptionJSON, payload: string) {
-  try {
-    await webpush.sendNotification(sub, payload);
-    return { success: true };
-  } catch (error) {
-    return handleWebPushError(error, sub.endpoint);
-  }
 }
 
 async function handleWebPushError(error: unknown, endpoint: string) {
@@ -93,63 +105,204 @@ async function handleWebPushError(error: unknown, endpoint: string) {
   }
 
   const { statusCode } = error as WebPushError;
-  if (statusCode === 410 || statusCode === 404) {
+
+  if (statusCode === 404 || statusCode === 410) {
     await deleteSubscription(endpoint);
     return { success: false, error: "Expired" };
   }
 
+  if (statusCode === 400 || statusCode === 401 || statusCode === 403) {
+    await deleteSubscription(endpoint);
+    return { success: false, error: "Invalid subscription" };
+  }
+
+  // Retain the subscription for transient provider failures. The delivery
+  // record will make a later cron invocation retry it.
   console.error("Push failed:", error);
-  return { success: false, error: "Failed" };
+  return { success: false, error: statusCode === 429 ? "Rate limited" : "Failed" };
 }
 
-export async function sendNotification(
+async function triggerWebPush(
+  sub: PushSubscriptionJSON,
   message: string,
-  targetSub: PushSubscriptionJSON | null
-): Promise<ServiceResponse> {
-  if (!message) return { success: false, error: "Invalid message" };
-
-  const payload = createPayload(message);
-
-  if (targetSub) {
-    if (!isValidSubscription(targetSub)) {
-      return { success: false, error: "Invalid subscription" };
-    }
-    return await triggerWebPush(targetSub, payload);
-  }
-
+) {
   try {
-    await prisma.sentMilestone.create({ data: { milestone: message } });
+    await webpush.sendNotification(sub, createPayload(message));
+    return { success: true, error: undefined };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      // Unique-constraint violation — milestone already sent, skip gracefully.
-      return { success: false, error: "Milestone already sent recently" };
+    return handleWebPushError(error, sub.endpoint);
+  }
+}
+
+const DELIVERY_LEASE_MS = 2 * 60_000;
+const RETRY_DELAY_MS = 60_000;
+
+async function claimDelivery(
+  milestone: ScheduledMilestone,
+  endpoint: string,
+  now: Date,
+): Promise<boolean> {
+  try {
+    await prisma.milestoneDelivery.create({
+      data: {
+        milestone: milestone.key,
+        endpoint,
+        status: "processing",
+        attempts: 1,
+        lockedAt: now,
+      },
+    });
+    return true;
+  } catch (error) {
+    if (
+      !(
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      )
+    ) {
+      throw error;
     }
-    // Anything else is a real DB problem (connection failure, schema mismatch, etc.).
-    console.error("Database error while locking milestone:", error);
-    return { success: false, error: "Internal database error" };
   }
 
-  after(async () => {
-    try {
-      const subscriptions = await getAllSubscriptions();
-      if (subscriptions.length === 0) return;
-
-      const results = await Promise.allSettled(
-        subscriptions.map((s) => triggerWebPush(s, payload))
-      );
-
-      const successCount = results.filter(
-        (r) => r.status === "fulfilled" && r.value.success
-      ).length;
-
-      console.warn(`[BROADCAST] ${successCount}/${subscriptions.length} success for: ${message}`);
-    } catch (error) {
-      console.error("Background broadcast failed:", error);
-    }
+  const staleLock = new Date(now.getTime() - DELIVERY_LEASE_MS);
+  const claimed = await prisma.milestoneDelivery.updateMany({
+    where: {
+      milestone: milestone.key,
+      endpoint,
+      OR: [
+        { status: "failed", nextAttemptAt: { lte: now } },
+        { status: "processing", lockedAt: { lt: staleLock } },
+      ],
+    },
+    data: {
+      status: "processing",
+      attempts: { increment: 1 },
+      lockedAt: now,
+      nextAttemptAt: null,
+      lastError: null,
+    },
   });
 
-  return {
-    success: true,
-    message: "Broadcast scheduled in background",
+  return claimed.count === 1;
+}
+
+async function markDeliverySent(milestone: string, endpoint: string, now: Date) {
+  await prisma.milestoneDelivery.updateMany({
+    where: { milestone, endpoint, status: "processing" },
+    data: { status: "sent", sentAt: now, lockedAt: null },
+  });
+}
+
+async function markDeliveryFailed(
+  milestone: string,
+  endpoint: string,
+  error: string,
+  now: Date,
+) {
+  await prisma.milestoneDelivery.updateMany({
+    where: { milestone, endpoint, status: "processing" },
+    data: {
+      status: "failed",
+      nextAttemptAt: new Date(now.getTime() + RETRY_DELAY_MS),
+      lastError: error,
+      lockedAt: null,
+    },
+  });
+}
+
+async function markDeliveryDiscarded(milestone: string, endpoint: string, now: Date) {
+  await prisma.milestoneDelivery.updateMany({
+    where: { milestone, endpoint, status: "processing" },
+    data: { status: "discarded", lockedAt: null, lastError: "Invalid subscription" },
+  });
+
+  // Keep the timestamp update separate from the status update so discarded
+  // records remain auditable without being eligible for another claim.
+  await prisma.milestoneDelivery.updateMany({
+    where: { milestone, endpoint, status: "discarded", sentAt: null },
+    data: { sentAt: now },
+  });
+}
+
+export type NotificationRunResult = {
+  due: number;
+  claimed: number;
+  sent: number;
+  failed: number;
+};
+
+/**
+ * Process local-time milestones for every subscription. Delivery rows are
+ * claimed atomically, so overlapping cron invocations do not duplicate pushes.
+ */
+export async function processDueMilestones(
+  nowTimestamp = Date.now(),
+): Promise<NotificationRunResult> {
+  const subscriptions = await getAllSubscriptions();
+  const now = new Date(nowTimestamp);
+  const retryRows = await prisma.milestoneDelivery.findMany({
+    where: {
+      status: "failed",
+      nextAttemptAt: { lte: now },
+    },
+    select: {
+      milestone: true,
+      endpoint: true,
+    },
+  });
+  const retryKeys = new Map<string, Set<string>>();
+  for (const row of retryRows) {
+    const keys = retryKeys.get(row.endpoint) ?? new Set<string>();
+    keys.add(row.milestone);
+    retryKeys.set(row.endpoint, keys);
+  }
+  const result: NotificationRunResult = {
+    due: 0,
+    claimed: 0,
+    sent: 0,
+    failed: 0,
   };
+
+  for (const subscription of subscriptions) {
+    const dueMilestones = getDueMilestones(subscription.timeZone, nowTimestamp);
+    const retryMilestoneKeys = retryKeys.get(subscription.endpoint) ?? new Set<string>();
+    const retryMilestones = getMilestonesForTimeZone(subscription.timeZone).filter(
+      (milestone) => retryMilestoneKeys.has(milestone.key),
+    );
+
+    // A retry must not depend on the original 90-second scheduling window.
+    // Reconstruct its definition from the subscriber's timezone instead.
+
+    const candidates = [
+      ...dueMilestones,
+      ...retryMilestones.filter(
+        (retry) => !dueMilestones.some((due) => due.key === retry.key),
+      ),
+    ].sort((a, b) => a.firesAt - b.firesAt);
+    result.due += candidates.length;
+
+    for (const milestone of candidates) {
+      const claimed = await claimDelivery(milestone, subscription.endpoint, now);
+      if (!claimed) continue;
+      result.claimed++;
+
+      const pushResult = await triggerWebPush(subscription, milestone.label);
+      if (pushResult.success || pushResult.error === "Expired") {
+        await markDeliverySent(milestone.key, subscription.endpoint, now);
+        if (pushResult.success) result.sent++;
+      } else if (pushResult.error === "Invalid subscription") {
+        await markDeliveryDiscarded(milestone.key, subscription.endpoint, now);
+      } else {
+        await markDeliveryFailed(
+          milestone.key,
+          subscription.endpoint,
+          pushResult.error ?? "Failed",
+          now,
+        );
+        result.failed++;
+      }
+    }
+  }
+
+  return result;
 }

@@ -6,6 +6,8 @@ import { cn } from "@/lib/cn";
 import { MILLISECONDS, RELEASE_DATE } from "@/lib/constants";
 import logo from "../public/vi-logo.png";
 
+// The visible countdown follows the visitor's local midnight. Push
+// notifications use the timezone captured when the subscription is saved.
 const TARGET = new Date(`${RELEASE_DATE}T00:00:00`).getTime();
 
 let now = typeof window !== "undefined" ? Date.now() : 0;

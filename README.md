@@ -30,7 +30,7 @@ pnpm install
 cp .env.template .env.local
 # edit .env.local and add your keys
 
-# Generate Prisma client and push schema
+# Generate Prisma client and apply the schema (including delivery tables)
 npx prisma generate
 npx prisma db push
 # OR with bun
@@ -57,9 +57,21 @@ Environment variables are defined in `.env.template`. Copy that file to `.env.lo
 - `DATABASE_URL` — Postgres connection string (Neon or other provider)
 - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — VAPID public key (visible to client)
 - `VAPID_PRIVATE_KEY` — VAPID private key (server-side only)
-- `CRON_SECRET` — CRON secret secure api route (openssl rand -hex 32)
+- `CRON_SECRET` — secret used by the external cron trigger (openssl rand -hex 32)
 
 You can generate VAPID keys using the `web-push` tool. Paste values into `.env.local` so the project can use them at runtime. The app validates that the `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is present before attempting a subscription.
+
+Cron scheduling
+---------------
+
+Vercel Hobby Cron Jobs cannot run every minute. Use an external HTTP scheduler such as cron-job.org or EasyCron to request the endpoint every minute:
+
+```text
+GET https://pwa-vi.vercel.app/api/time
+Authorization: Bearer <CRON_SECRET>
+```
+
+The endpoint is protected and returns `401 Unauthorized` when the secret is missing or incorrect. The worker calculates milestones in each subscriber's IANA timezone and stores per-subscription delivery state so overlapping requests do not duplicate notifications and transient failures can retry.
 
 
 Build & deploy
